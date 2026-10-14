@@ -18,7 +18,7 @@ render() {
   local src="$REPO_ROOT/$1" dest="$RADDB/$2"
   [[ -f "$src" ]] || die "Missing template $src"
   # Keep the distro's original file once, so you can always go back.
-  if [[ -f "$dest" && ! -f "$dest.orig" ]]; then
+  if root_file_exists "$dest" && ! root_file_exists "$dest.orig"; then
     sudo cp -p "$dest" "$dest.orig"
   fi
   envsubst "$VARS" < "$src" | sudo tee "$dest" > /dev/null
@@ -41,9 +41,10 @@ step "Checking IPv6 support"
 SITE="$RADDB/sites-available/default"
 if [[ -f /proc/net/if_inet6 ]]; then
   echo "  IPv6 available — leaving defaults."
-elif grep -qE '^\s*ipv6addr' "$SITE"; then
-  [[ -f "$SITE.orig" ]] || sudo cp -p "$SITE" "$SITE.orig"
-  awk '
+# (grep without -q reads the whole file; -q stops early and can fail with error 141)
+elif root_cat "$SITE" | grep -E '^\s*ipv6addr' > /dev/null; then
+  root_file_exists "$SITE.orig" || sudo cp -p "$SITE" "$SITE.orig"
+  root_cat "$SITE" | awk '
     /^listen[ \t]*\{/ { inblk=1; depth=0; buf="" }
     inblk {
       buf = buf $0 "\n"
@@ -56,7 +57,7 @@ elif grep -qE '^\s*ipv6addr' "$SITE"; then
       next
     }
     { print }
-  ' "$SITE" | sudo tee "$SITE.new" > /dev/null
+  ' | sudo tee "$SITE.new" > /dev/null
   sudo mv "$SITE.new" "$SITE"
   sudo chown root:freerad "$SITE"; sudo chmod 640 "$SITE"
   yellow "  IPv6 is off in this WSL — disabled FreeRADIUS IPv6 listeners (IPv4 is all we need)."
@@ -65,11 +66,13 @@ else
 fi
 
 step "Checking the configuration"
-# The log file is written as you (not root) on purpose, so you can read it.
+# A fresh private temp file each run, owned by you so you can read it.
+CHECK_LOG="$(mktemp)"
+trap 'rm -f "$CHECK_LOG"' EXIT
 # shellcheck disable=SC2024
-if ! sudo freeradius -C > /tmp/freeradius-check.log 2>&1; then
+if ! sudo freeradius -C > "$CHECK_LOG" 2>&1; then
   red "Config check FAILED. Last lines:"
-  tail -n 25 /tmp/freeradius-check.log
+  tail -n 25 "$CHECK_LOG"
   die "Fix the error above, or run: sudo freeradius -X"
 fi
 green "Config is valid."

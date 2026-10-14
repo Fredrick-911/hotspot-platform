@@ -10,7 +10,7 @@ ensure_env
 start_service postgresql
 
 SCHEMA="$RADDB/mods-config/sql/main/postgresql/schema.sql"
-[[ -f "$SCHEMA" ]] || die "Schema not found at $SCHEMA. Did step 1 finish?"
+root_file_exists "$SCHEMA" || die "Schema not found at $SCHEMA. Did step 1 finish?"
 
 # Run SQL as the PostgreSQL superuser (no password needed inside WSL).
 as_postgres() { sudo -u postgres psql -v ON_ERROR_STOP=1 -q "$@"; }
@@ -36,10 +36,11 @@ as_radius() {
 }
 
 step "Loading FreeRADIUS tables"
-if as_radius -tAc "SELECT to_regclass('public.radcheck')" | grep -q radcheck; then
+if as_radius -tAc "SELECT to_regclass('public.radcheck')" | grep radcheck > /dev/null; then
   yellow "Tables already exist — skipping schema load."
 else
-  as_radius -f "$SCHEMA"
+  # The schema file is root-only, so read it with sudo and pipe it into psql.
+  root_cat "$SCHEMA" | as_radius
   green "Tables created."
 fi
 

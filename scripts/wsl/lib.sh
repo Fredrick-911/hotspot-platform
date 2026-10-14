@@ -14,8 +14,8 @@ red() { printf '\033[31m%s\033[0m\n' "$*"; }
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 die() { red "ERROR: $*"; exit 1; }
 
-# Random secret made of letters and digits only (safe inside config files).
-random_secret() { openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c "${1:-24}"; }
+# Random secret: 32 hex characters (0-9, a-f), safe inside config files.
+random_secret() { openssl rand -hex 16; }
 
 # Create .env from .env.example the first time, filling in random secrets.
 ensure_env() {
@@ -32,6 +32,11 @@ ensure_env() {
   source "$ENV_FILE"
   set +a
 }
+
+# FreeRADIUS locks /etc/freeradius so only root can look inside. These helpers
+# check and read files there with sudo, so the scripts work as a normal user.
+root_file_exists() { sudo test -f "$1"; }
+root_cat() { sudo cat "$1"; }
 
 require_sudo() {
   sudo -v || die "This script needs sudo (your WSL password)."

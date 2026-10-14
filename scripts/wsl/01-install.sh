@@ -24,7 +24,9 @@ step "Starting PostgreSQL"
 start_service postgresql
 
 step "Checking versions"
-freeradius -v | head -n 1
+# awk reads ALL the output and prints line 1. ("head -n 1" stops reading early,
+# which kills freeradius mid-output and makes the script fail with error 141.)
+freeradius -v | awk 'NR == 1'
 psql --version
 
 green "Install complete. Next: ./scripts/wsl/02-setup-database.sh"
