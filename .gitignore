@@ -1,0 +1,20 @@
+# Secrets — never commit
+.env
+*.pem
+*.key
+
+# Build output
+/bin/
+/dist/
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

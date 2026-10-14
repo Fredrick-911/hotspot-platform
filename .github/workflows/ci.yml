@@ -1,0 +1,55 @@
+# CI: runs automatically on every push to main and on every pull request.
+# A pull request cannot be merged until all three jobs are green.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go — format, vet, test, build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Run 'make fmt'. Unformatted files:"; echo "$unformatted"; exit 1
+          fi
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: CGO_ENABLED=0 go build -o bin/api ./cmd/api
+
+  shell:
+    name: Shell scripts — shellcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck -x scripts/wsl/*.sh
+
+  radius:
+    name: FreeRADIUS — install, configure, test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # Runs the exact scripts developers run in WSL, on a fresh Ubuntu machine.
+      - run: ./scripts/wsl/01-install.sh
+      - run: ./scripts/wsl/02-setup-database.sh
+      - run: ./scripts/wsl/03-configure-freeradius.sh
+      - run: ./scripts/wsl/04-test-radius.sh
+      - name: Show FreeRADIUS log on failure
+        if: failure()
+        run: sudo tail -n 100 /var/log/freeradius/radius.log || true

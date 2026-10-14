@@ -1,0 +1,58 @@
+# FreeRADIUS SQL module — connects FreeRADIUS to our PostgreSQL database.
+#
+# This is a TEMPLATE. scripts/wsl/03-configure-freeradius.sh fills in the
+# ${RADIUS_DB_*} values from .env and installs it as
+# /etc/freeradius/3.0/mods-available/sql.
+#
+# Variables such as ${modconfdir} and ${dialect} belong to FreeRADIUS itself
+# and are deliberately left untouched by the script.
+
+sql {
+	dialect = "postgresql"
+	driver = "rlm_sql_${dialect}"
+
+	server = "${RADIUS_DB_HOST}"
+	port = ${RADIUS_DB_PORT}
+	login = "${RADIUS_DB_USER}"
+	password = "${RADIUS_DB_PASSWORD}"
+	radius_db = "${RADIUS_DB_NAME}"
+
+	postgresql {
+		send_application_name = yes
+	}
+
+	# Tables created by FreeRADIUS's official schema.sql.
+	# Our Go backend writes users into radcheck / radreply,
+	# and reads usage from radacct.
+	acct_table1 = "radacct"
+	acct_table2 = "radacct"
+	postauth_table = "radpostauth"
+	authcheck_table = "radcheck"
+	groupcheck_table = "radgroupcheck"
+	authreply_table = "radreply"
+	groupreply_table = "radgroupreply"
+	usergroup_table = "radusergroup"
+
+	delete_stale_sessions = yes
+
+	# Routers are listed in clients.conf for now.
+	# Later the Go backend can register routers in the "nas" table instead.
+	read_clients = no
+	client_table = "nas"
+
+	group_attribute = "SQL-Group"
+
+	pool {
+		start = ${thread[pool].start_servers}
+		min = ${thread[pool].min_spare_servers}
+		max = ${thread[pool].max_servers}
+		spare = ${thread[pool].max_spare_servers}
+		uses = 0
+		retry_delay = 30
+		lifetime = 0
+		idle_timeout = 60
+		max_retries = 5
+	}
+
+	$INCLUDE ${modconfdir}/${.:name}/main/${dialect}/queries.conf
+}

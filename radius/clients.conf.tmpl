@@ -1,0 +1,30 @@
+# FreeRADIUS clients — the devices allowed to ask "is this user allowed?"
+#
+# TEMPLATE: scripts/wsl/03-configure-freeradius.sh fills in values from .env
+# and installs it as /etc/freeradius/3.0/clients.conf.
+#
+# A "client" here is a ROUTER (MikroTik), not a WiFi user. FreeRADIUS ignores
+# any packet from an address not listed below, and rejects packets signed with
+# the wrong secret.
+
+# Your own machine — used by radtest / radclient while testing.
+client localhost {
+	ipaddr = 127.0.0.1
+	proto = *
+	secret = testing123
+	require_message_authenticator = no
+	nas_type = other
+	limit {
+		max_connections = 16
+		lifetime = 0
+		idle_timeout = 30
+	}
+}
+
+# Phase 0 lab MikroTik router on your local network.
+client mikrotik-lab {
+	ipaddr = ${MIKROTIK_LAB_SUBNET}
+	secret = ${MIKROTIK_LAB_SECRET}
+	shortname = mikrotik-lab
+	nas_type = other
+}

@@ -1,0 +1,10 @@
+# Who must review changes to which folders.
+# Replace @Fredrick-911 with real GitHub usernames.
+# Docs: https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+*                @Fredrick-911
+
+# RADIUS config and setup scripts can lock every user out — always reviewed.
+/radius/         @Fredrick-911
+/scripts/        @Fredrick-911
+/.github/        @Fredrick-911

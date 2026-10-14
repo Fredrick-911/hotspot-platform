@@ -1,0 +1,13 @@
+# Store every text file with Linux (LF) line endings.
+# Without this, Git on Windows can convert scripts to CRLF and they fail in
+# WSL with errors like "/usr/bin/env: 'bash\r': No such file or directory".
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.tmpl text eol=lf
+*.sql  text eol=lf
+Makefile text eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
