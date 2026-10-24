@@ -43,16 +43,16 @@ That is exactly what a MikroTik router will ask it to do in Phase 0.
 
 **Words you will see:**
 
-| Word | Meaning |
-|---|---|
-| **WSL** | Windows Subsystem for Linux — a real Ubuntu Linux running inside Windows. |
-| **RADIUS** | The standard language routers use to ask a server "can this user log in, and with what limits?" |
-| **FreeRADIUS** | The free, widely used RADIUS server program. |
-| **Client** (in RADIUS) | The **router** asking questions — not the person on WiFi. |
-| **Shared secret** | A password the router and FreeRADIUS both know, so FreeRADIUS trusts the router. |
-| **Access-Accept / Access-Reject** | FreeRADIUS's answers: "let them in" / "keep them out". |
-| **Accounting** | The router's reports of how long a user was online and how much data they used. |
-| **Port 1812 / 1813** | The network "doors" for logins (1812) and accounting (1813). They use **UDP**. |
+| Word                                    | Meaning                                                                                         |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **WSL**                           | Windows Subsystem for Linux — a real Ubuntu Linux running inside Windows.                      |
+| **RADIUS**                        | The standard language routers use to ask a server "can this user log in, and with what limits?" |
+| **FreeRADIUS**                    | The free, widely used RADIUS server program.                                                    |
+| **Client** (in RADIUS)            | The **router** asking questions — not the person on WiFi.                                |
+| **Shared secret**                 | A password the router and FreeRADIUS both know, so FreeRADIUS trusts the router.                |
+| **Access-Accept / Access-Reject** | FreeRADIUS's answers: "let them in" / "keep them out".                                          |
+| **Accounting**                    | The router's reports of how long a user was online and how much data they used.                 |
+| **Port 1812 / 1813**              | The network "doors" for logins (1812) and accounting (1813). They use **UDP**.            |
 
 ---
 
@@ -145,7 +145,6 @@ Any Go 1.24 or newer works; check [go.dev/dl](https://go.dev/dl/) for the latest
 ### 3A. If you are creating the repository (first time only)
 
 1. On GitHub, click **New repository** → name it `hotspot-platform` → **Private** → do **not** add a README → **Create**.
-
 2. Copy the starter zip from your Windows Downloads folder into WSL and unpack it:
 
    ```bash
@@ -154,20 +153,17 @@ Any Go 1.24 or newer works; check [go.dev/dl](https://go.dev/dl/) for the latest
    unzip hotspot-platform.zip
    cd hotspot-platform
    ```
-
 3. Replace the placeholder username with your GitHub username (or organisation) everywhere:
 
    ```bash
-   grep -rl "Fredrick-911" . | xargs sed -i 's/Fredrick-911/your-real-username/g'
+   grep -rl "YOUR-GITHUB-USERNAME" . | xargs sed -i 's/YOUR-GITHUB-USERNAME/your-real-username/g'
    ```
-
 4. Make the scripts runnable, then check the Go code builds:
 
    ```bash
    chmod +x scripts/wsl/*.sh
    make check
    ```
-
 5. Push it to GitHub:
 
    ```bash
@@ -177,9 +173,7 @@ Any Go 1.24 or newer works; check [go.dev/dl](https://go.dev/dl/) for the latest
    git remote add origin git@github.com:your-real-username/hotspot-platform.git
    git push -u origin main
    ```
-
 6. On GitHub, open the **Actions** tab. The CI pipeline runs automatically. All three jobs should turn green within a few minutes.
-
 7. Protect `main` (see [CONTRIBUTING.md](../../CONTRIBUTING.md#protecting-main)).
 
 ### 3B. If you are a collaborator
@@ -206,13 +200,13 @@ It runs four scripts in order. Here is what each one does.
 
 Installs from Ubuntu's package store:
 
-| Package | Purpose |
-|---|---|
-| `freeradius` | The RADIUS server |
-| `freeradius-utils` | Test tools: `radtest`, `radclient` |
-| `freeradius-postgresql` | Lets FreeRADIUS read users from PostgreSQL |
-| `postgresql` | The database |
-| `gettext-base` | `envsubst`, used to fill in our config templates |
+| Package                   | Purpose                                            |
+| ------------------------- | -------------------------------------------------- |
+| `freeradius`            | The RADIUS server                                  |
+| `freeradius-utils`      | Test tools: `radtest`, `radclient`             |
+| `freeradius-postgresql` | Lets FreeRADIUS read users from PostgreSQL         |
+| `postgresql`            | The database                                       |
+| `gettext-base`          | `envsubst`, used to fill in our config templates |
 
 ### Step 2 — `scripts/wsl/02-setup-database.sh`: create the database
 
@@ -221,11 +215,11 @@ Installs from Ubuntu's package store:
 3. Loads FreeRADIUS's official tables (`radcheck`, `radreply`, `radacct`, ...).
 4. Adds test plans and users from `radius/sql/seed-dev.sql`:
 
-| Username | Password | Plan | Limits |
-|---|---|---|---|
-| `test-hour` | `pass1234` | `plan-1hour` | 1 hour, 2 Mbps up / 5 Mbps down |
-| `test-data` | `pass1234` | `plan-500mb` | 500 MB total, 3M / 10M |
-| `test-custom` | `pass1234` | none | 2 minutes, 1M / 1M (set on the user directly) |
+| Username        | Password     | Plan           | Limits                                        |
+| --------------- | ------------ | -------------- | --------------------------------------------- |
+| `test-hour`   | `pass1234` | `plan-1hour` | 1 hour, 2 Mbps up / 5 Mbps down               |
+| `test-data`   | `pass1234` | `plan-500mb` | 500 MB total, 3M / 10M                        |
+| `test-custom` | `pass1234` | none           | 2 minutes, 1M / 1M (set on the user directly) |
 
 ### Step 3 — `scripts/wsl/03-configure-freeradius.sh`: configure FreeRADIUS
 
@@ -354,22 +348,22 @@ Router ──Accounting Start / Interim-Update / Stop──► FreeRADIUS ──
 
 ### The reply attributes that control a MikroTik user
 
-| Attribute | Example | Effect on the MikroTik |
-|---|---|---|
-| `Mikrotik-Rate-Limit` | `2M/5M` | Speed cap: **upload/download** from the user's view |
-| `Session-Timeout` | `3600` | Disconnect after this many **seconds** |
-| `Mikrotik-Total-Limit` | `524288000` | Disconnect after this many **bytes** (up + down) |
-| `Acct-Interim-Interval` | `60` | Send a usage update every 60 seconds |
-| `Idle-Timeout` | `300` | Disconnect after 5 minutes of no traffic |
+| Attribute                 | Example       | Effect on the MikroTik                                    |
+| ------------------------- | ------------- | --------------------------------------------------------- |
+| `Mikrotik-Rate-Limit`   | `2M/5M`     | Speed cap: **upload/download** from the user's view |
+| `Session-Timeout`       | `3600`      | Disconnect after this many **seconds**              |
+| `Mikrotik-Total-Limit`  | `524288000` | Disconnect after this many **bytes** (up + down)    |
+| `Acct-Interim-Interval` | `60`        | Send a usage update every 60 seconds                      |
+| `Idle-Timeout`          | `300`       | Disconnect after 5 minutes of no traffic                  |
 
 ### Where files live
 
-| In this repo (edit these) | Installed to (don't edit by hand) |
-|---|---|
-| `radius/clients.conf.tmpl` | `/etc/freeradius/3.0/clients.conf` |
-| `radius/mods-available/sql.tmpl` | `/etc/freeradius/3.0/mods-available/sql` |
-| `radius/sql/seed-dev.sql` | rows in the `radius` database |
-| `.env` (secrets, never committed) | values substituted into the above |
+| In this repo (edit these)           | Installed to (don't edit by hand)          |
+| ----------------------------------- | ------------------------------------------ |
+| `radius/clients.conf.tmpl`        | `/etc/freeradius/3.0/clients.conf`       |
+| `radius/mods-available/sql.tmpl`  | `/etc/freeradius/3.0/mods-available/sql` |
+| `radius/sql/seed-dev.sql`         | rows in the `radius` database            |
+| `.env` (secrets, never committed) | values substituted into the above          |
 
 The rule: **change files in the repo, then run `make radius-config`**. Hand edits in `/etc/freeradius` get overwritten and aren't shared with the team.
 
@@ -432,18 +426,18 @@ New-NetFirewallHyperVRule -Name "FreeRADIUS-WSL" -DisplayName "FreeRADIUS (WSL)"
 
 **First step for almost every problem:** run `make radius-debug` in one terminal, repeat the failing action in another, and read the output.
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `/usr/bin/env: 'bash\r': No such file or directory` | Files got Windows line endings | Clone inside WSL (not `/mnt/c`), and set `git config --global core.autocrlf input`. Then `git rm --cached -r . && git reset --hard` |
-| `Permission denied` running a script | Scripts not executable | `chmod +x scripts/wsl/*.sh` |
-| `No reply from server` in `radtest` | FreeRADIUS not running | `make radius-start`, then `make radius-status` |
-| Debug mode: `Failed binding to ... port 1812: Address already in use` | Background FreeRADIUS still running | `make radius-stop`, then `make radius-debug` |
-| Debug mode: `Address family not supported by protocol` | IPv6 off in WSL | `make radius-config` (handles it automatically) |
-| Debug mode: `Ignoring request ... from unknown client` | Router's IP isn't in `clients.conf` | Fix `MIKROTIK_LAB_SUBNET` in `.env`, then `make radius-config` |
-| Debug mode: `Shared secret is incorrect` | Router and `.env` secrets differ | Copy `MIKROTIK_LAB_SECRET` from `.env` exactly into the router |
-| Debug mode: `rlm_sql ... failed to connect` | PostgreSQL stopped or wrong password | `make radius-start`. If you changed the DB password in `.env`, re-run `make radius-setup` |
-| Test 1 passes but limits are missing | User not in a plan group | Check `radusergroup` and `radgroupreply` in `make db-shell` |
-| MikroTik gets no answer, `radtest` works | Network/firewall | Redo Section 7 steps 1–4. Confirm the laptop IP in the MikroTik's `/radius` entry |
+| Symptom                                                                 | Cause                                 | Fix                                                                                                                                       |
+| ----------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/usr/bin/env: 'bash\r': No such file or directory`                   | Files got Windows line endings        | Clone inside WSL (not `/mnt/c`), and set `git config --global core.autocrlf input`. Then `git rm --cached -r . && git reset --hard` |
+| `Permission denied` running a script                                  | Scripts not executable                | `chmod +x scripts/wsl/*.sh`                                                                                                             |
+| `No reply from server` in `radtest`                                 | FreeRADIUS not running                | `make radius-start`, then `make radius-status`                                                                                        |
+| Debug mode: `Failed binding to ... port 1812: Address already in use` | Background FreeRADIUS still running   | `make radius-stop`, then `make radius-debug`                                                                                          |
+| Debug mode: `Address family not supported by protocol`                | IPv6 off in WSL                       | `make radius-config` (handles it automatically)                                                                                         |
+| Debug mode: `Ignoring request ... from unknown client`                | Router's IP isn't in `clients.conf` | Fix `MIKROTIK_LAB_SUBNET` in `.env`, then `make radius-config`                                                                      |
+| Debug mode: `Shared secret is incorrect`                              | Router and `.env` secrets differ    | Copy `MIKROTIK_LAB_SECRET` from `.env` exactly into the router                                                                        |
+| Debug mode: `rlm_sql ... failed to connect`                           | PostgreSQL stopped or wrong password  | `make radius-start`. If you changed the DB password in `.env`, re-run `make radius-setup`                                           |
+| Test 1 passes but limits are missing                                    | User not in a plan group              | Check `radusergroup` and `radgroupreply` in `make db-shell`                                                                         |
+| MikroTik gets no answer, `radtest` works                              | Network/firewall                      | Redo Section 7 steps 1–4. Confirm the laptop IP in the MikroTik's `/radius` entry                                                      |
 
 ### Undo everything
 
