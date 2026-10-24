@@ -1,26 +1,45 @@
-// Package httpapi wires HTTP routes to handlers. Feature packages (tenant,
-// plan, payment, ...) register their routes here as they are built.
 package httpapi
 
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/Fredrick-911/hotspot-platform/internal/tenant"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// NewRouter returns the HTTP handler for the whole API.
-func NewRouter() http.Handler {
+// NewRouter sets up all HTTP routes and middleware.
+func NewRouter(db *pgxpool.Pool) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", handleHealth)
+
+	// Public routes (No tenant required)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+
+	// Tenant routes (Require a valid subdomain)
+	tenantMux := http.NewServeMux()
+	tenantMux.HandleFunc("/", handlePortalHome)
+
+	// Wrap in tenant middleware if DB is available (nil-safe for unit tests)
+	if db != nil {
+		mux.Handle("/", tenant.Middleware(db)(tenantMux))
+	} else {
+		mux.Handle("/", tenantMux)
+	}
+
 	return mux
 }
 
-// handleHealth lets load balancers, uptime monitors and CI check the API is alive.
-func handleHealth(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
+func handlePortalHome(w http.ResponseWriter, r *http.Request) {
+	// Pull the tenant out of the context (injected by middleware)
+	t := tenant.FromContext(r.Context())
 
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
+	w.Header().Set("Content-Type", "text/html")
+	_, _ = w.Write([]byte("<h1>Welcome to " + t.Name + " WiFi</h1><p>Buy a package below.</p>"))
 }

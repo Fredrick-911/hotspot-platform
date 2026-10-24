@@ -1,4 +1,3 @@
-// Command api starts the hotspot platform HTTP server.
 package main
 
 import (
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Fredrick-911/hotspot-platform/internal/config"
+	"github.com/Fredrick-911/hotspot-platform/internal/database"
 	"github.com/Fredrick-911/hotspot-platform/internal/httpapi"
 )
 
@@ -31,16 +31,27 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	// 1. Initialize Database Connection Pool
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer dbCancel()
+
+	dbPool, err := database.Open(dbCtx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("database setup failed: %w", err)
+	}
+	defer dbPool.Close()
+	logger.Info("database connected successfully")
+
+	// 2. Setup HTTP Server (Notice we don't pass dbPool to NewRouter yet, we will in the next step)
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.HTTPPort),
-		Handler:           httpapi.NewRouter(),
+		Handler:           httpapi.NewRouter(dbPool),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
-	// Stop cleanly on Ctrl+C or when the server is told to shut down.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
