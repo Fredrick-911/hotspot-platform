@@ -1,0 +1,63 @@
+name: CD — Deploy to Vultr
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & Deploy to Vultr
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: true
+
+      - name: Compile Go binary (Linux amd64)
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          go build -trimpath -ldflags="-s -w" -o dist/hotspot-api ./cmd/api
+
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VULTR_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p ${{ secrets.VULTR_SSH_PORT || 22 }} ${{ secrets.VULTR_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy binaries and deployment scripts to Vultr
+        env:
+          SSH_PORT: ${{ secrets.VULTR_SSH_PORT || 22 }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+          SSH_HOST: ${{ secrets.VULTR_HOST }}
+        run: |
+          scp -P "${SSH_PORT}" dist/hotspot-api "${SSH_USER}@${SSH_HOST}:/tmp/hotspot-api"
+
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "mkdir -p /tmp/radius-updates /tmp/migrations-updates"
+          scp -P "${SSH_PORT}" -r radius/* "${SSH_USER}@${SSH_HOST}:/tmp/radius-updates/"
+          scp -P "${SSH_PORT}" -r migrations/* "${SSH_USER}@${SSH_HOST}:/tmp/migrations-updates/"
+
+          scp -P "${SSH_PORT}" deploy/deploy.sh "${SSH_USER}@${SSH_HOST}:/tmp/deploy.sh"
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "chmod +x /tmp/deploy.sh"
+
+      - name: Execute deployment on Vultr
+        env:
+          SSH_PORT: ${{ secrets.VULTR_SSH_PORT || 22 }}
+          SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+          SSH_HOST: ${{ secrets.VULTR_HOST }}
+        run: |
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" "/tmp/deploy.sh"
