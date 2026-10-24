@@ -45,7 +45,7 @@ func run(logger *slog.Logger) error {
 	// 2. Setup HTTP Server (Notice we don't pass dbPool to NewRouter yet, we will in the next step)
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.HTTPPort),
-		Handler:           httpapi.NewRouter(),
+		Handler:           httpapi.NewRouter(dbPool),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

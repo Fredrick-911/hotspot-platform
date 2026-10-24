@@ -36,3 +36,6 @@ CREATE TABLE IF NOT EXISTS devices (
 -- Indexes for fast lookups
 CREATE INDEX IF NOT EXISTS idx_plans_tenant_id ON plans(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_devices_tenant_id ON devices(tenant_id);
+-- Grant permissions to the radius user
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO radius;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO radius;
