@@ -13,7 +13,7 @@ echo "==> Starting deployment: ${TIMESTAMP}"
 # 1. Determine configured port from .env (fallback to 8081)
 APP_PORT="8081"
 if [ -f "${ENV_FILE}" ]; then
-    DETECTED_PORT="$(grep -E '^PORT=' "${ENV_FILE}" | cut -d'=' -f2 | tr -d ' "\r' || true)"
+    DETECTED_PORT="$(grep -E '^HTTP_PORT=' "${ENV_FILE}" | cut -d'=' -f2 | tr -d ' "\r' || true)"
     if [ -n "${DETECTED_PORT}" ]; then
         APP_PORT="${DETECTED_PORT}"
     fi
