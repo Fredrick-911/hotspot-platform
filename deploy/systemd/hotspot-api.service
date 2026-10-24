@@ -1,0 +1,22 @@
+[Unit]
+Description=Hotspot Platform API
+After=network.target postgresql.service freeradius.service
+Wants=postgresql.service freeradius.service
+
+[Service]
+Type=simple
+User=hotspot
+Group=hotspot
+WorkingDirectory=/opt/hotspot-platform
+ExecStart=/opt/hotspot-platform/bin/api
+Restart=always
+RestartSec=5s
+EnvironmentFile=/opt/hotspot-platform/.env
+
+# Security sandbox
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
