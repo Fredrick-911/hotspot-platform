@@ -1,7 +1,3 @@
-// Package config loads application settings from environment variables.
-//
-// Every setting has a safe development default, so `make run` works with no
-// setup. In production the values come from the server's environment.
 package config
 
 import (
@@ -12,8 +8,9 @@ import (
 
 // Config holds all runtime settings for the API.
 type Config struct {
-	Env      string // "development" or "production"
-	HTTPPort int
+	Env         string // "development" or "production"
+	HTTPPort    int
+	DatabaseURL string // Add this
 }
 
 // Load reads settings from the environment.
@@ -22,9 +19,16 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("HTTP_PORT must be a number: %w", err)
 	}
+
+	dbURL := getenv("DATABASE_URL", "")
+	if dbURL == "" {
+		return Config{}, fmt.Errorf("DATABASE_URL environment variable is required")
+	}
+
 	return Config{
-		Env:      getenv("APP_ENV", "development"),
-		HTTPPort: port,
+		Env:         getenv("APP_ENV", "development"),
+		HTTPPort:    port,
+		DatabaseURL: dbURL,
 	}, nil
 }
 
