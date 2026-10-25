@@ -23,19 +23,23 @@ const tenantContextKey = contextKey("tenant")
 
 var ErrTenantNotFound = errors.New("tenant not found")
 
-// Middleware inspects the Host header, looks up the tenant, and adds it to the context.
+// Middleware inspects the Host header OR ?tenant= query param, looks up the tenant, and adds it to the context.
 func Middleware(db *pgxpool.Pool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Strip port if present (e.g., "superfast.hotspot.local:8080" -> "superfast.hotspot.local")
-			host := r.Host
-			if colonIdx := strings.Index(host, ":"); colonIdx != -1 {
-				host = host[:colonIdx]
-			}
+			var subdomain string
 
-			// Extract subdomain (e.g., "superfast.hotspot.local" -> "superfast")
-			parts := strings.Split(host, ".")
-			subdomain := parts[0]
+			// 1. Allow query parameter override for easy testing in browser (e.g. ?tenant=metrowifi)
+			if qTenant := r.URL.Query().Get("tenant"); qTenant != "" {
+				subdomain = strings.ToLower(strings.TrimSpace(qTenant))
+			} else {
+				// 2. Otherwise extract subdomain from Host header
+				host := r.Host
+				if colonIdx := strings.Index(host, ":"); colonIdx != -1 {
+					host = host[:colonIdx]
+				}
+				subdomain = strings.Split(host, ".")[0]
+			}
 
 			// Query the database for this subdomain
 			var t Tenant
