@@ -52,7 +52,44 @@
         .spinner { width: 36px; height: 36px; border: 4px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 0.75rem; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .success-box { display: none; text-align: center; padding: 1rem 0; }
-        .pin-display { font-size: 1.75rem; font-weight: 800; letter-spacing: 4px; color: var(--primary); margin: 0.5rem 0; }
+
+        /* Tap to Copy Box */
+        .copy-container {
+            background: #f0fdf4;
+            border: 2px dashed #86efac;
+            border-radius: 12px;
+            padding: 0.85rem 1rem;
+            margin: 0.75rem 0 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .copy-container:hover {
+            background: #dcfce7;
+            border-color: #4ade80;
+        }
+        .copy-container:active {
+            transform: scale(0.98);
+        }
+        .pin-display {
+            font-size: 2.1rem;
+            font-weight: 800;
+            letter-spacing: 6px;
+            color: var(--primary);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            line-height: 1.1;
+        }
+        .copy-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #15803d;
+            margin-top: 0.4rem;
+            transition: color 0.2s ease;
+        }
         .status-msg { font-size: 0.85rem; color: #16a34a; font-weight: 600; margin-top: 0.5rem; }
     </style>
 </head>
@@ -123,9 +160,18 @@
                 <div style="font-size: 2rem;">✅</div>
                 <h2>Payment Confirmed!</h2>
                 <p>Your Wi-Fi Access PIN is:</p>
-                <div class="pin-display" id="userPin">----</div>
+                
+                <!-- Tap to Copy Card -->
+                <div class="copy-container" onclick="copyPinToClipboard()" title="Tap to copy PIN">
+                    <div class="pin-display" id="userPin">----</div>
+                    <div class="copy-badge" id="copyBadge">
+                        <span id="copyIcon">📋</span>
+                        <span id="copyText">Tap to copy PIN</span>
+                    </div>
+                </div>
+
                 <p class="status-msg" id="connectMsg">Connecting you to the internet...</p>
-                <button class="submit-btn" id="manualConnectBtn" style="width: 100%; margin-top: 1rem;" onclick="manualLoginRedirect()">Browse Now</button>
+                <button class="submit-btn" id="manualConnectBtn" style="width: 100%; margin-top: 0.75rem;" onclick="manualLoginRedirect()">Browse Now</button>
             </div>
         </div>
     </div>
@@ -133,14 +179,15 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const tenantParam = urlParams.get('tenant') ? `?tenant=${urlParams.get('tenant')}` : '';
-        const linkLogin = urlParams.get('link-login') || ''; // e.g. "http://192.168.88.1/login"
-        const deviceMac = urlParams.get('mac') || '';        // e.g. "48:8F:5A:11:22:33"
+        const linkLogin = urlParams.get('link-login') || '';
+        const deviceMac = urlParams.get('mac') || '';
         const linkOrig = urlParams.get('link-orig') || 'https://www.google.com';
 
         let selectedPlanId = null;
         let pollTimer = null;
         let authUsername = '';
         let authPin = '';
+        let copyResetTimeout = null;
 
         function openPaymentModal(planId, name, price) {
             selectedPlanId = planId;
@@ -222,7 +269,6 @@
                             authPin = data.pin;
                             document.getElementById('userPin').innerText = data.pin || 'PAID';
 
-                            // Automatically log into MikroTik router if connected to hotspot
                             handleHotspotAutoLogin(data.username, data.pin);
                         } else if (data.status === 'FAILED') {
                             clearInterval(pollTimer);
@@ -236,6 +282,56 @@
             }, 2000);
         }
 
+        // Dual-Engine Copy Mechanism (HTTPS + HTTP fallback)
+        async function copyPinToClipboard() {
+            const pinElement = document.getElementById('userPin');
+            const pin = pinElement.innerText.trim();
+            if (!pin || pin === '----' || pin === 'PAID') return;
+
+            let copied = false;
+
+            if (navigator.clipboard && window.isSecureContext) {
+                try {
+                    await navigator.clipboard.writeText(pin);
+                    copied = true;
+                } catch (err) {
+                    copied = false;
+                }
+            }
+
+            // Fallback for HTTP IP addresses or captive network WebViews
+            if (!copied) {
+                try {
+                    const tempInput = document.createElement('input');
+                    tempInput.value = pin;
+                    tempInput.style.position = 'fixed';
+                    tempInput.style.opacity = '0';
+                    document.body.appendChild(tempInput);
+                    tempInput.focus();
+                    tempInput.select();
+                    copied = document.execCommand('copy');
+                    document.body.removeChild(tempInput);
+                } catch (e) {
+                    copied = false;
+                }
+            }
+
+            if (copied) {
+                const icon = document.getElementById('copyIcon');
+                const text = document.getElementById('copyText');
+                icon.innerText = '✅';
+                text.innerText = 'Copied to clipboard!';
+                text.style.color = '#15803d';
+
+                if (copyResetTimeout) clearTimeout(copyResetTimeout);
+                copyResetTimeout = setTimeout(() => {
+                    icon.innerText = '📋';
+                    text.innerText = 'Tap to copy PIN';
+                    text.style.color = '#15803d';
+                }, 2500);
+            }
+        }
+
         function handleHotspotAutoLogin(username, pin) {
             if (linkLogin) {
                 document.getElementById('connectMsg').innerText = 'Auto-connecting to Wi-Fi...';
@@ -245,10 +341,9 @@
                 document.getElementById('hsPassword').value = pin;
                 document.getElementById('hsDst').value = linkOrig;
 
-                // Brief 1.5s pause so the user sees their PIN before redirect
                 setTimeout(() => {
                     form.submit();
-                }, 1500);
+                }, 2000);
             } else {
                 document.getElementById('connectMsg').innerText = 'You can now browse the internet!';
             }
