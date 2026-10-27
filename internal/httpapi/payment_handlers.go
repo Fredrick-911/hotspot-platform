@@ -163,7 +163,6 @@ func handlePaymentCallback(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 	w.WriteHeader(http.StatusOK)
 }
 
-// handleCheckPaymentStatus is polled by the captive portal front-end.
 func handleCheckPaymentStatus(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool, cfg config.Config, paymentID string) {
 	var status string
 	var receipt *string
@@ -171,6 +170,7 @@ func handleCheckPaymentStatus(w http.ResponseWriter, r *http.Request, db *pgxpoo
 	var durationMinutes int
 	var speedLimit *string
 	var dataLimitBytes *int64
+	var pin, username string
 
 	err := db.QueryRow(r.Context(), `
 		SELECT p.status, p.mpesa_receipt, p.external_reference, p.tenant_id::text, p.plan_id::text, p.phone_number,
@@ -203,6 +203,8 @@ func handleCheckPaymentStatus(w http.ResponseWriter, r *http.Request, db *pgxpoo
 					slog.Error("failed to provision user after PayHero active check", "err", err)
 				} else {
 					slog.Info("active reconciliation provisioned user in FreeRADIUS", "username", sess.Username, "pin", sess.Password)
+					username = sess.Username
+					pin = sess.Password
 				}
 			}
 		}
@@ -213,10 +215,11 @@ func handleCheckPaymentStatus(w http.ResponseWriter, r *http.Request, db *pgxpoo
 		resp["receipt"] = *receipt
 	}
 
-	// If successful, retrieve their username and PIN for router login
+	// If successful and pin wasn't populated from active check, load from DB
 	if status == "SUCCESS" {
-		var username, pin string
-		_ = db.QueryRow(r.Context(), `SELECT username, password FROM sessions WHERE payment_id = $1`, paymentID).Scan(&username, &pin)
+		if pin == "" {
+			_ = db.QueryRow(r.Context(), `SELECT username, password FROM sessions WHERE payment_id = $1`, paymentID).Scan(&username, &pin)
+		}
 		resp["username"] = username
 		resp["pin"] = pin
 	}
