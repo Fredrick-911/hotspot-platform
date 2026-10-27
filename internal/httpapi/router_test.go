@@ -5,13 +5,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Fredrick-911/hotspot-platform/internal/config"
 )
 
 func TestHealth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 
-	NewRouter(nil).ServeHTTP(rec, req)
+	NewRouter(nil, config.Config{}).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -25,10 +27,8 @@ func TestHealthRejectsPost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/health", nil)
 	rec := httptest.NewRecorder()
 
-	NewRouter(nil).ServeHTTP(rec, req)
+	NewRouter(nil, config.Config{}).ServeHTTP(rec, req)
 
-	// Note: If this specific test fails later, it means we need to
-	// re-add the "GET /health" method restriction to router.go!
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 	}
