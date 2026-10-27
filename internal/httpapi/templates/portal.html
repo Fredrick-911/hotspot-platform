@@ -7,8 +7,8 @@
     <title>{{ .Tenant.Name }} - Wi-Fi Portal</title>
     <style>
         :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
+            --primary: #16a34a; /* M-Pesa Green */
+            --primary-hover: #15803d;
             --bg: #f8fafc;
             --card-bg: #ffffff;
             --text-main: #0f172a;
@@ -20,25 +20,38 @@
         body { background-color: var(--bg); color: var(--text-main); display: flex; justify-content: center; min-height: 100vh; padding: 1.25rem; }
         .portal-card { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 1.25rem; }
         .header { text-align: center; padding: 1.25rem 0 0.5rem; }
-        .wifi-icon { width: 44px; height: 44px; background: #dbeafe; color: var(--primary); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 0.75rem; font-size: 1.25rem; }
+        .wifi-icon { width: 44px; height: 44px; background: #dcfce7; color: var(--primary); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 0.75rem; font-size: 1.25rem; }
         .header h1 { font-size: 1.35rem; font-weight: 700; color: var(--text-main); }
         .header p { font-size: 0.9rem; color: var(--text-muted); margin-top: 0.25rem; }
         .plans-list { display: flex; flex-direction: column; gap: 0.85rem; }
-        .plan-item { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-        .plan-item:hover { border-color: var(--primary); }
+        .plan-item { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
         .plan-info h3 { font-size: 1.05rem; font-weight: 600; }
         .plan-badges { display: flex; gap: 0.5rem; margin-top: 0.35rem; }
         .badge { font-size: 0.75rem; font-weight: 500; background: #f1f5f9; color: var(--text-muted); padding: 0.2rem 0.55rem; border-radius: 6px; }
         .plan-action { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
         .price { font-size: 1.2rem; font-weight: 700; color: var(--text-main); }
-        .buy-btn { background: var(--primary); color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; text-decoration: none; transition: background 0.15s; }
+        .buy-btn { background: var(--primary); color: #fff; border: none; padding: 0.55rem 1.1rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; text-decoration: none; transition: background 0.15s; }
         .buy-btn:hover { background: var(--primary-hover); }
         .footer-box { background: var(--card-bg); border: 1.5px dashed var(--border); border-radius: var(--radius); padding: 1rem; text-align: center; }
         .footer-box p { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem; }
         .voucher-input { width: 100%; padding: 0.65rem 0.85rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.9rem; text-transform: uppercase; text-align: center; letter-spacing: 2px; font-weight: 600; margin-bottom: 0.5rem; outline: none; }
-        .voucher-input:focus { border-color: var(--primary); }
         .voucher-btn { width: 100%; background: #0f172a; color: #fff; border: none; padding: 0.65rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
-        .empty-plans { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.9rem; }
+
+        /* Modal Styles */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 1rem; z-index: 50; }
+        .modal { background: #fff; border-radius: var(--radius); width: 100%; max-width: 380px; padding: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .modal h2 { font-size: 1.2rem; margin-bottom: 0.25rem; }
+        .modal p { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem; }
+        .phone-input { width: 100%; padding: 0.75rem 1rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 1rem; outline: none; margin-bottom: 1rem; }
+        .phone-input:focus { border-color: var(--primary); }
+        .modal-actions { display: flex; gap: 0.5rem; }
+        .submit-btn { flex: 2; background: var(--primary); color: #fff; border: none; padding: 0.75rem; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+        .cancel-btn { flex: 1; background: #f1f5f9; color: var(--text-muted); border: none; padding: 0.75rem; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem; }
+        .spinner-box { display: none; text-align: center; padding: 1rem 0; }
+        .spinner { width: 36px; height: 36px; border: 4px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 0.75rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .success-box { display: none; text-align: center; padding: 1rem 0; }
+        .pin-display { font-size: 1.75rem; font-weight: 800; letter-spacing: 4px; color: var(--primary); margin: 0.5rem 0; }
     </style>
 </head>
 <body>
@@ -46,40 +59,162 @@
         <div class="header">
             <div class="wifi-icon">📶</div>
             <h1>{{ .Tenant.Name }}</h1>
-            <p>Select a package to get high-speed internet</p>
+            <p>Select an internet pass to connect</p>
         </div>
 
         <div class="plans-list">
-            {{ if .Plans }}
-                {{ range .Plans }}
-                <div class="plan-item">
-                    <div class="plan-info">
-                        <h3>{{ .Name }}</h3>
-                        <div class="plan-badges">
-                            <span class="badge">⏱ {{ .FormattedDuration }}</span>
-                            <span class="badge">📊 {{ .FormattedDataLimit }}</span>
-                        </div>
-                    </div>
-                    <div class="plan-action">
-                        <div class="price">KES {{ .FormattedPrice }}</div>
-                        <button class="buy-btn" onclick="alert('Payment with M-Pesa coming in Phase 2!')">Buy Now</button>
+            {{ range .Plans }}
+            <div class="plan-item">
+                <div class="plan-info">
+                    <h3>{{ .Name }}</h3>
+                    <div class="plan-badges">
+                        <span class="badge">⏱ {{ .FormattedDuration }}</span>
+                        <span class="badge">📊 {{ .FormattedDataLimit }}</span>
                     </div>
                 </div>
-                {{ end }}
-            {{ else }}
-                <div class="empty-plans">
-                    No active packages found for this network. Please contact the administrator.
+                <div class="plan-action">
+                    <div class="price">KES {{ .FormattedPrice }}</div>
+                    <button class="buy-btn" onclick="openPaymentModal('{{ .ID }}', '{{ .Name }}', '{{ .FormattedPrice }}')">Buy Pass</button>
                 </div>
+            </div>
             {{ end }}
         </div>
 
         <div class="footer-box">
-            <p>Already have a voucher PIN?</p>
-            <form onsubmit="event.preventDefault(); alert('Voucher login coming next!');">
-                <input class="voucher-input" type="text" placeholder="ENTER PIN" maxlength="12" required>
-                <button class="voucher-btn" type="submit">Connect with PIN</button>
+            <p>Already paid or have a PIN?</p>
+            <form onsubmit="event.preventDefault(); alert('Connecting with PIN...');">
+                <input class="voucher-input" type="text" placeholder="ENTER 4-DIGIT PIN" maxlength="6" required>
+                <button class="voucher-btn" type="submit">Connect to Internet</button>
             </form>
         </div>
     </div>
+
+    <!-- Payment Modal -->
+    <div class="modal-overlay" id="paymentModal">
+        <div class="modal">
+            <div id="modalForm">
+                <h2 id="modalPlanName">Buy Pass</h2>
+                <p id="modalPlanPrice">Enter your Safaricom M-Pesa phone number:</p>
+                <input class="phone-input" id="phoneInput" type="tel" placeholder="0712 345 678" maxlength="13" autofocus>
+                <div class="modal-actions">
+                    <button class="cancel-btn" onclick="closePaymentModal()">Cancel</button>
+                    <button class="submit-btn" id="payBtn" onclick="initiatePayment()">Pay with M-Pesa</button>
+                </div>
+            </div>
+
+            <!-- Waiting for STK PIN -->
+            <div class="spinner-box" id="spinnerBox">
+                <div class="spinner"></div>
+                <h3>Check your phone!</h3>
+                <p>An M-Pesa prompt has been sent. Enter your PIN to complete payment.</p>
+            </div>
+
+            <!-- Payment Success -->
+            <div class="success-box" id="successBox">
+                <div style="font-size: 2rem;">✅</div>
+                <h2>Payment Confirmed!</h2>
+                <p>Your Wi-Fi Access PIN is:</p>
+                <div class="pin-display" id="userPin">----</div>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Keep this PIN to reconnect anytime.</p>
+                <button class="submit-btn" style="width: 100%;" onclick="window.location.reload()">Start Browsing</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedPlanId = null;
+        let pollTimer = null;
+
+        function openPaymentModal(planId, name, price) {
+            selectedPlanId = planId;
+            document.getElementById('modalPlanName').innerText = name;
+            document.getElementById('modalPlanPrice').innerText = 'Pay KES ' + price + ' via M-Pesa STK push:';
+            document.getElementById('modalForm').style.display = 'block';
+            document.getElementById('spinnerBox').style.display = 'none';
+            document.getElementById('successBox').style.display = 'none';
+            document.getElementById('paymentModal').style.display = 'flex';
+        }
+
+        function closePaymentModal() {
+            if (pollTimer) clearInterval(pollTimer);
+            document.getElementById('paymentModal').style.display = 'none';
+        }
+
+        async function initiatePayment() {
+            const phone = document.getElementById('phoneInput').value.trim();
+            if (!phone) {
+                alert('Please enter a valid M-Pesa phone number.');
+                return;
+            }
+
+            document.getElementById('payBtn').disabled = true;
+            document.getElementById('payBtn').innerText = 'Sending...';
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const tenantParam = urlParams.get('tenant') ? `?tenant=${urlParams.get('tenant')}` : '';
+
+            try {
+                const res = await fetch('/api/payments/initiate' + tenantParam, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        plan_id: selectedPlanId,
+                        phone_number: phone
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || 'Failed to initiate payment.');
+                    document.getElementById('payBtn').disabled = false;
+                    document.getElementById('payBtn').innerText = 'Pay with M-Pesa';
+                    return;
+                }
+
+                // Switch to waiting spinner
+                document.getElementById('modalForm').style.display = 'none';
+                document.getElementById('spinnerBox').style.display = 'block';
+
+                // Poll status every 2 seconds
+                pollPaymentStatus(data.payment_id, tenantParam);
+            } catch (err) {
+                alert('Network error connecting to payment gateway.');
+                document.getElementById('payBtn').disabled = false;
+                document.getElementById('payBtn').innerText = 'Pay with M-Pesa';
+            }
+        }
+
+        function pollPaymentStatus(paymentId, tenantParam) {
+            let attempts = 0;
+            pollTimer = setInterval(async () => {
+                attempts++;
+                if (attempts > 35) { // 70 seconds timeout
+                    clearInterval(pollTimer);
+                    alert('Payment timed out. If you entered your PIN, check with support.');
+                    closePaymentModal();
+                    return;
+                }
+
+                try {
+                    const res = await fetch(`/api/payments/status${tenantParam}&id=${paymentId}`.replace('?&', '?'));
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.status === 'SUCCESS') {
+                            clearInterval(pollTimer);
+                            document.getElementById('spinnerBox').style.display = 'none';
+                            document.getElementById('successBox').style.display = 'block';
+                            document.getElementById('userPin').innerText = data.pin || 'PAID';
+                        } else if (data.status === 'FAILED') {
+                            clearInterval(pollTimer);
+                            alert('M-Pesa payment was cancelled or failed.');
+                            closePaymentModal();
+                        }
+                    }
+                } catch (e) {
+                    console.error('Polling error', e);
+                }
+            }, 2000);
+        }
+    </script>
 </body>
 </html>

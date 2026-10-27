@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Fredrick-911/hotspot-platform/internal/config"
 	"github.com/Fredrick-911/hotspot-platform/internal/device"
 	"github.com/Fredrick-911/hotspot-platform/internal/plan"
 	"github.com/Fredrick-911/hotspot-platform/internal/tenant"
@@ -25,10 +26,10 @@ type portalViewData struct {
 	Plans  []plan.Plan
 }
 
-func NewRouter(db *pgxpool.Pool) http.Handler {
+func NewRouter(db *pgxpool.Pool, cfg config.Config) http.Handler {
 	mux := http.NewServeMux()
 
-	// Public health route
+	// 1. Public health route
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -38,15 +39,38 @@ func NewRouter(db *pgxpool.Pool) http.Handler {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
+	// 2. Public PayHero Webhook Callback (No tenant wrapper needed since external_reference has tenant)
+	mux.HandleFunc("/api/payments/callback", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handlePaymentCallback(w, r, db)
+	})
+
 	// Tenant-scoped routes
 	tenantMux := http.NewServeMux()
 
-	// 1. Device Registration API
+	// Device registration API
 	tenantMux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {
 		handleDevices(w, r, db)
 	})
 
-	// 2. Captive Portal UI
+	// Payment initiation and polling
+	tenantMux.HandleFunc("/api/payments/initiate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleInitiatePayment(w, r, db, cfg)
+	})
+
+	tenantMux.HandleFunc("/api/payments/status", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		handleCheckPaymentStatus(w, r, db, id)
+	})
+
+	// Captive portal UI
 	tenantMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handlePortalHome(w, r, db)
 	})
