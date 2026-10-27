@@ -121,3 +121,52 @@ func (c *Client) InitiateSTK(ctx context.Context, phone string, amount int, extR
 
 	return &stkResp, nil
 }
+
+// TransactionItem represents a transaction record from PayHero's API.
+type TransactionItem struct {
+	ID                int     `json:"id"`
+	TransactionType   string  `json:"transaction_type"`
+	Amount            float64 `json:"amount"`
+	ProviderReference string  `json:"provider_reference"`
+	ExternalReference string  `json:"external_reference"`
+}
+
+type transactionsListResponse struct {
+	Transactions []TransactionItem `json:"transactions"`
+}
+
+// FindInboundPayment queries PayHero for a confirmed payment matching our external reference.
+func (c *Client) FindInboundPayment(ctx context.Context, extRef string) (*TransactionItem, error) {
+	endpoint := fmt.Sprintf("%s/api/v2/transactions?reference=%s", PayHeroAPIBaseURL, extRef)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build request: %w", err)
+	}
+
+	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.username, c.password)))
+	req.Header.Set("Authorization", fmt.Sprintf("Basic %s", auth))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("payhero query failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("payhero query returned status: %d", resp.StatusCode)
+	}
+
+	var list transactionsListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		return nil, fmt.Errorf("failed to decode payhero transactions: %w", err)
+	}
+
+	for _, tx := range list.Transactions {
+		if tx.ExternalReference == extRef && tx.TransactionType == "inbound_payment" {
+			return &tx, nil
+		}
+	}
+
+	return nil, nil // Still pending
+}

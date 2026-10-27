@@ -113,3 +113,33 @@ func ProvisionUser(ctx context.Context, db *pgxpool.Pool, tenantID, planID, paym
 
 	return &sess, nil
 }
+
+// ReconnectByPhoneOrPIN verifies if a phone or PIN has an active, non-expired session.
+func ReconnectByPhoneOrPIN(ctx context.Context, db *pgxpool.Pool, tenantID, phoneOrPIN string, newMAC *string) (*Session, error) {
+	query := `
+		SELECT id::text, tenant_id::text, plan_id::text, payment_id::text, phone_number, mac_address,
+		       username, password, duration_minutes, starts_at, expires_at, status
+		FROM sessions
+		WHERE tenant_id = $1 
+		  AND (phone_number = $2 OR password = $2)
+		  AND status = 'ACTIVE' 
+		  AND expires_at > NOW()
+		ORDER BY expires_at DESC
+		LIMIT 1
+	`
+	var sess Session
+	err := db.QueryRow(ctx, query, tenantID, phoneOrPIN).Scan(
+		&sess.ID, &sess.TenantID, &sess.PlanID, &sess.PaymentID, &sess.PhoneNumber, &sess.MacAddress,
+		&sess.Username, &sess.Password, &sess.DurationMinutes, &sess.StartsAt, &sess.ExpiresAt, &sess.Status,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("no active session found: %w", err)
+	}
+
+	// Update with new MAC address if provided
+	if newMAC != nil && *newMAC != "" {
+		_, _ = db.Exec(ctx, "UPDATE sessions SET mac_address = $1 WHERE id = $2", *newMAC, sess.ID)
+	}
+
+	return &sess, nil
+}

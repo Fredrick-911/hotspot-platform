@@ -164,15 +164,48 @@ func handlePaymentCallback(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 }
 
 // handleCheckPaymentStatus is polled by the captive portal front-end.
-func handleCheckPaymentStatus(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool, paymentID string) {
+func handleCheckPaymentStatus(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool, cfg config.Config, paymentID string) {
 	var status string
 	var receipt *string
+	var extRef, tenantID, planID, phone string
+	var durationMinutes int
+	var speedLimit *string
+	var dataLimitBytes *int64
+
 	err := db.QueryRow(r.Context(), `
-		SELECT status, mpesa_receipt FROM payments WHERE id = $1
-	`, paymentID).Scan(&status, &receipt)
+		SELECT p.status, p.mpesa_receipt, p.external_reference, p.tenant_id::text, p.plan_id::text, p.phone_number,
+		       pl.duration_minutes, pl.speed_limit, pl.data_limit_bytes
+		FROM payments p
+		JOIN plans pl ON pl.id = p.plan_id
+		WHERE p.id = $1
+	`, paymentID).Scan(&status, &receipt, &extRef, &tenantID, &planID, &phone, &durationMinutes, &speedLimit, &dataLimitBytes)
 	if err != nil {
 		http.Error(w, `{"error":"payment not found"}`, http.StatusNotFound)
 		return
+	}
+
+	// Active Fallback: If still PENDING, verify directly with PayHero API
+	if status == "PENDING" && cfg.PayHeroUsername != "" && cfg.PayHeroChannelID > 0 {
+		client := payment.NewClient(cfg.PayHeroUsername, cfg.PayHeroPassword, cfg.PayHeroChannelID)
+		tx, err := client.FindInboundPayment(r.Context(), extRef)
+		if err == nil && tx != nil {
+			cmdTag, err := db.Exec(r.Context(), `
+				UPDATE payments 
+				SET status = 'SUCCESS', mpesa_receipt = $1, result_desc = 'Reconciled via PayHero API', updated_at = NOW()
+				WHERE id = $2 AND status = 'PENDING'
+			`, tx.ProviderReference, paymentID)
+
+			if err == nil && cmdTag.RowsAffected() > 0 {
+				status = "SUCCESS"
+				receipt = &tx.ProviderReference
+				sess, err := session.ProvisionUser(r.Context(), db, tenantID, planID, paymentID, phone, nil, durationMinutes, speedLimit, dataLimitBytes)
+				if err != nil {
+					slog.Error("failed to provision user after PayHero active check", "err", err)
+				} else {
+					slog.Info("active reconciliation provisioned user in FreeRADIUS", "username", sess.Username, "pin", sess.Password)
+				}
+			}
+		}
 	}
 
 	resp := map[string]any{"status": status}
@@ -180,13 +213,44 @@ func handleCheckPaymentStatus(w http.ResponseWriter, r *http.Request, db *pgxpoo
 		resp["receipt"] = *receipt
 	}
 
-	// If successful, retrieve their session PIN
+	// If successful, retrieve their username and PIN for router login
 	if status == "SUCCESS" {
-		var pin string
-		_ = db.QueryRow(r.Context(), `SELECT password FROM sessions WHERE payment_id = $1`, paymentID).Scan(&pin)
+		var username, pin string
+		_ = db.QueryRow(r.Context(), `SELECT username, password FROM sessions WHERE payment_id = $1`, paymentID).Scan(&username, &pin)
+		resp["username"] = username
 		resp["pin"] = pin
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+type reconnectReq struct {
+	PhoneOrPIN string  `json:"phone_or_pin"`
+	MacAddress *string `json:"mac_address,omitempty"`
+}
+
+// handleReconnectSession allows users with active sessions to reconnect without paying again.
+func handleReconnectSession(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool) {
+	t := tenant.FromContext(r.Context())
+
+	var req reconnectReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	sess, err := session.ReconnectByPhoneOrPIN(r.Context(), db, t.ID, strings.TrimSpace(req.PhoneOrPIN), req.MacAddress)
+	if err != nil {
+		http.Error(w, `{"error":"No active pass found for this phone or PIN"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":     "ACTIVE",
+		"username":   sess.Username,
+		"pin":        sess.Password,
+		"expires_at": sess.ExpiresAt,
+	})
 }
