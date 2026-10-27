@@ -67,7 +67,16 @@ func NewRouter(db *pgxpool.Pool, cfg config.Config) http.Handler {
 
 	tenantMux.HandleFunc("/api/payments/status", func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("id")
-		handleCheckPaymentStatus(w, r, db, id)
+		handleCheckPaymentStatus(w, r, db, cfg, id)
+	})
+
+	// Reconnect session recovery
+	tenantMux.HandleFunc("/api/sessions/reconnect", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleReconnectSession(w, r, db)
 	})
 
 	// Captive portal UI

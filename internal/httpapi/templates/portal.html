@@ -7,7 +7,7 @@
     <title>{{ .Tenant.Name }} - Wi-Fi Portal</title>
     <style>
         :root {
-            --primary: #16a34a; /* M-Pesa Green */
+            --primary: #16a34a;
             --primary-hover: #15803d;
             --bg: #f8fafc;
             --card-bg: #ffffff;
@@ -35,6 +35,7 @@
         .footer-box { background: var(--card-bg); border: 1.5px dashed var(--border); border-radius: var(--radius); padding: 1rem; text-align: center; }
         .footer-box p { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.6rem; }
         .voucher-input { width: 100%; padding: 0.65rem 0.85rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.9rem; text-transform: uppercase; text-align: center; letter-spacing: 2px; font-weight: 600; margin-bottom: 0.5rem; outline: none; }
+        .voucher-input:focus { border-color: var(--primary); }
         .voucher-btn { width: 100%; background: #0f172a; color: #fff; border: none; padding: 0.65rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
 
         /* Modal Styles */
@@ -52,6 +53,7 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .success-box { display: none; text-align: center; padding: 1rem 0; }
         .pin-display { font-size: 1.75rem; font-weight: 800; letter-spacing: 4px; color: var(--primary); margin: 0.5rem 0; }
+        .status-msg { font-size: 0.85rem; color: #16a34a; font-weight: 600; margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -81,13 +83,20 @@
         </div>
 
         <div class="footer-box">
-            <p>Already paid or have a PIN?</p>
-            <form onsubmit="event.preventDefault(); alert('Connecting with PIN...');">
-                <input class="voucher-input" type="text" placeholder="ENTER 4-DIGIT PIN" maxlength="6" required>
-                <button class="voucher-btn" type="submit">Connect to Internet</button>
+            <p>Already paid or have an active pass?</p>
+            <form onsubmit="reconnectWithPass(event)">
+                <input class="voucher-input" id="reconnectInput" type="text" placeholder="ENTER PHONE OR PIN" maxlength="15" required>
+                <button class="voucher-btn" id="reconnectBtn" type="submit">Restore My Pass</button>
             </form>
         </div>
     </div>
+
+    <!-- Hidden form that posts directly to MikroTik Hotspot Login servlet -->
+    <form id="hotspotForm" method="POST" action="" style="display: none;">
+        <input type="hidden" name="username" id="hsUsername" value="">
+        <input type="hidden" name="password" id="hsPassword" value="">
+        <input type="hidden" name="dst" id="hsDst" value="https://www.google.com">
+    </form>
 
     <!-- Payment Modal -->
     <div class="modal-overlay" id="paymentModal">
@@ -115,15 +124,23 @@
                 <h2>Payment Confirmed!</h2>
                 <p>Your Wi-Fi Access PIN is:</p>
                 <div class="pin-display" id="userPin">----</div>
-                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">Keep this PIN to reconnect anytime.</p>
-                <button class="submit-btn" style="width: 100%;" onclick="window.location.reload()">Start Browsing</button>
+                <p class="status-msg" id="connectMsg">Connecting you to the internet...</p>
+                <button class="submit-btn" id="manualConnectBtn" style="width: 100%; margin-top: 1rem;" onclick="manualLoginRedirect()">Browse Now</button>
             </div>
         </div>
     </div>
 
     <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const tenantParam = urlParams.get('tenant') ? `?tenant=${urlParams.get('tenant')}` : '';
+        const linkLogin = urlParams.get('link-login') || ''; // e.g. "http://192.168.88.1/login"
+        const deviceMac = urlParams.get('mac') || '';        // e.g. "48:8F:5A:11:22:33"
+        const linkOrig = urlParams.get('link-orig') || 'https://www.google.com';
+
         let selectedPlanId = null;
         let pollTimer = null;
+        let authUsername = '';
+        let authPin = '';
 
         function openPaymentModal(planId, name, price) {
             selectedPlanId = planId;
@@ -150,16 +167,14 @@
             document.getElementById('payBtn').disabled = true;
             document.getElementById('payBtn').innerText = 'Sending...';
 
-            const urlParams = new URLSearchParams(window.location.search);
-            const tenantParam = urlParams.get('tenant') ? `?tenant=${urlParams.get('tenant')}` : '';
-
             try {
                 const res = await fetch('/api/payments/initiate' + tenantParam, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         plan_id: selectedPlanId,
-                        phone_number: phone
+                        phone_number: phone,
+                        mac_address: deviceMac
                     })
                 });
 
@@ -171,24 +186,22 @@
                     return;
                 }
 
-                // Switch to waiting spinner
                 document.getElementById('modalForm').style.display = 'none';
                 document.getElementById('spinnerBox').style.display = 'block';
 
-                // Poll status every 2 seconds
-                pollPaymentStatus(data.payment_id, tenantParam);
+                pollPaymentStatus(data.payment_id);
             } catch (err) {
-                alert('Network error connecting to payment gateway.');
+                alert('Network error connecting to server.');
                 document.getElementById('payBtn').disabled = false;
                 document.getElementById('payBtn').innerText = 'Pay with M-Pesa';
             }
         }
 
-        function pollPaymentStatus(paymentId, tenantParam) {
+        function pollPaymentStatus(paymentId) {
             let attempts = 0;
             pollTimer = setInterval(async () => {
                 attempts++;
-                if (attempts > 35) { // 70 seconds timeout
+                if (attempts > 35) {
                     clearInterval(pollTimer);
                     alert('Payment timed out. If you entered your PIN, check with support.');
                     closePaymentModal();
@@ -196,14 +209,21 @@
                 }
 
                 try {
-                    const res = await fetch(`/api/payments/status${tenantParam}&id=${paymentId}`.replace('?&', '?'));
+                    const statusUrl = `/api/payments/status${tenantParam}${tenantParam ? '&' : '?'}id=${paymentId}`;
+                    const res = await fetch(statusUrl);
                     if (res.ok) {
                         const data = await res.json();
                         if (data.status === 'SUCCESS') {
                             clearInterval(pollTimer);
                             document.getElementById('spinnerBox').style.display = 'none';
                             document.getElementById('successBox').style.display = 'block';
+
+                            authUsername = data.username;
+                            authPin = data.pin;
                             document.getElementById('userPin').innerText = data.pin || 'PAID';
+
+                            // Automatically log into MikroTik router if connected to hotspot
+                            handleHotspotAutoLogin(data.username, data.pin);
                         } else if (data.status === 'FAILED') {
                             clearInterval(pollTimer);
                             alert('M-Pesa payment was cancelled or failed.');
@@ -214,6 +234,67 @@
                     console.error('Polling error', e);
                 }
             }, 2000);
+        }
+
+        function handleHotspotAutoLogin(username, pin) {
+            if (linkLogin) {
+                document.getElementById('connectMsg').innerText = 'Auto-connecting to Wi-Fi...';
+                const form = document.getElementById('hotspotForm');
+                form.action = linkLogin;
+                document.getElementById('hsUsername').value = username;
+                document.getElementById('hsPassword').value = pin;
+                document.getElementById('hsDst').value = linkOrig;
+
+                // Brief 1.5s pause so the user sees their PIN before redirect
+                setTimeout(() => {
+                    form.submit();
+                }, 1500);
+            } else {
+                document.getElementById('connectMsg').innerText = 'You can now browse the internet!';
+            }
+        }
+
+        function manualLoginRedirect() {
+            if (linkLogin && authUsername && authPin) {
+                handleHotspotAutoLogin(authUsername, authPin);
+            } else {
+                window.location.href = linkOrig;
+            }
+        }
+
+        async function reconnectWithPass(e) {
+            e.preventDefault();
+            const inputVal = document.getElementById('reconnectInput').value.trim();
+            if (!inputVal) return;
+
+            document.getElementById('reconnectBtn').disabled = true;
+            document.getElementById('reconnectBtn').innerText = 'Checking...';
+
+            try {
+                const res = await fetch('/api/sessions/reconnect' + tenantParam, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        phone_or_pin: inputVal,
+                        mac_address: deviceMac
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    alert(data.error || 'No active pass found.');
+                    document.getElementById('reconnectBtn').disabled = false;
+                    document.getElementById('reconnectBtn').innerText = 'Restore My Pass';
+                    return;
+                }
+
+                alert(`Active pass found! Logging in with PIN: ${data.pin}`);
+                handleHotspotAutoLogin(data.username, data.pin);
+            } catch (err) {
+                alert('Network error restoring pass.');
+                document.getElementById('reconnectBtn').disabled = false;
+                document.getElementById('reconnectBtn').innerText = 'Restore My Pass';
+            }
         }
     </script>
 </body>
