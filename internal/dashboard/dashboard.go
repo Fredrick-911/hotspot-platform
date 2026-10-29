@@ -32,6 +32,11 @@ func (s Stats) FormattedTotalRevenue() string {
 	return fmt.Sprintf("%.2f", float64(s.TotalRevenueCents)/100.0)
 }
 
+// FormattedRevenue is a compatibility alias for FormattedTodayRevenue.
+func (s Stats) FormattedRevenue() string {
+	return s.FormattedTodayRevenue()
+}
+
 // CustomerSession represents a combined view of payment, session, and plan for customer support.
 type CustomerSession struct {
 	SessionID       string
