@@ -1,0 +1,308 @@
+<!-- internal/httpapi/templates/dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .TenantName }} — Owner Dashboard</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --green: #16a34a;
+            --radius: 12px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding: 1.5rem; line-height: 1.5; }
+        .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+        
+        .top-header { display: flex; justify-content: space-between; align-items: center; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03); flex-wrap: wrap; gap: 1rem; }
+        .brand { display: flex; align-items: center; gap: 0.85rem; }
+        .brand-icon { width: 44px; height: 44px; background: #eff6ff; color: var(--primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.35rem; }
+        .brand h1 { font-size: 1.35rem; font-weight: 700; }
+        .brand span { font-size: 0.82rem; color: var(--muted); }
+        .header-actions { display: flex; gap: 0.65rem; align-items: center; }
+
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+        .metric-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .metric-title { font-size: 0.82rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric-val { font-size: 1.85rem; font-weight: 800; margin-top: 0.4rem; }
+        .metric-val.green { color: var(--green); }
+
+        .section-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; }
+        .section-header h2 { font-size: 1.15rem; font-weight: 700; }
+
+        .search-form { display: flex; gap: 0.5rem; width: 100%; max-width: 420px; }
+        .search-input { flex: 1; padding: 0.6rem 0.9rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.88rem; outline: none; }
+        .search-input:focus { border-color: var(--primary); }
+        .btn { padding: 0.6rem 1.1rem; border-radius: 8px; font-size: 0.88rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); }
+        .btn-danger { background: #fee2e2; color: #dc2626; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+        .btn-danger:hover { background: #fecaca; }
+
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left; }
+        th { padding: 0.75rem 1rem; border-bottom: 1.5px solid var(--border); color: var(--muted); font-size: 0.78rem; text-transform: uppercase; font-weight: 600; }
+        td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tr:hover td { background-color: #f8fafc; }
+        .pin-pill { font-family: monospace; font-size: 1.05rem; font-weight: 800; background: #f0fdf4; color: var(--green); padding: 0.2rem 0.55rem; border-radius: 6px; border: 1px solid #bbf7d0; display: inline-block; }
+        .badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
+        .badge-active { background: #dcfce7; color: #15803d; }
+        .badge-expired { background: #f1f5f9; color: var(--muted); }
+
+        .create-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-top: 1rem; }
+        .form-group label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-bottom: 0.3rem; }
+        .form-control { width: 100%; padding: 0.6rem 0.8rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.88rem; outline: none; }
+        .form-control:focus { border-color: var(--primary); }
+        pre { background: #0f172a; color: #f8fafc; padding: 1.25rem; border-radius: 8px; font-size: 0.82rem; overflow-x: auto; line-height: 1.45; font-family: monospace; margin-top: 0.75rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Top Navigation -->
+        <div class="top-header">
+            <div class="brand">
+                <div class="brand-icon">📶</div>
+                <div>
+                    <h1>{{ .TenantName }}</h1>
+                    <span>Owner Administrative Dashboard</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a class="btn btn-secondary" href="/dashboard/export.csv?tenant={{ .Subdomain }}">📥 Export CSV</a>
+                <a class="btn btn-primary" href="/?tenant={{ .Subdomain }}" target="_blank">Open Customer Portal ↗</a>
+            </div>
+        </div>
+
+        <!-- Metric KPI Cards -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-title">Today's Revenue</div>
+                <div class="metric-val green">KES {{ .Stats.FormattedRevenue }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Active Online Users</div>
+                <div class="metric-val">{{ .Stats.ActiveSessions }}</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Connected Routers</div>
+                <div class="metric-val">{{ .Stats.TotalDevices }}</div>
+            </div>
+        </div>
+
+        <!-- Section 1: Customer Support & PIN Lookup -->
+        <div class="section-card">
+            <div class="section-header">
+                <div>
+                    <h2>Customer Support & Active Passes</h2>
+                    <span style="font-size: 0.82rem; color: var(--muted);">Look up customer PINs, remaining time, or revoke access</span>
+                </div>
+                <form class="search-form" method="GET" action="/dashboard">
+                    <input type="hidden" name="tenant" value="{{ .Subdomain }}">
+                    <input class="search-input" type="text" name="q" value="{{ .SearchQuery }}" placeholder="Search phone, receipt, or PIN...">
+                    <button class="btn btn-primary" type="submit">Search</button>
+                    {{ if .SearchQuery }}
+                    <a class="btn btn-secondary" href="/dashboard?tenant={{ .Subdomain }}">Clear</a>
+                    {{ end }}
+                </form>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Phone Number</th>
+                            <th>M-Pesa Receipt</th>
+                            <th>Package</th>
+                            <th>Amount</th>
+                            <th>Wi-Fi PIN</th>
+                            <th>Time Left</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ if .Sessions }}
+                            {{ range .Sessions }}
+                            <tr>
+                                <td style="font-weight: 600;">{{ .PhoneNumber }}</td>
+                                <td>{{ .MpesaReceipt }}</td>
+                                <td>{{ .PlanName }}</td>
+                                <td>KES {{ .FormattedAmount }}</td>
+                                <td><span class="pin-pill">{{ .Pin }}</span></td>
+                                <td>{{ .TimeRemaining }}</td>
+                                <td>
+                                    {{ if eq .Status "ACTIVE" }}
+                                    <span class="badge badge-active">ACTIVE</span>
+                                    {{ else }}
+                                    <span class="badge badge-expired">EXPIRED</span>
+                                    {{ end }}
+                                </td>
+                                <td>
+                                    {{ if eq .Status "ACTIVE" }}
+                                    <form method="POST" action="/api/sessions/revoke?tenant={{ $.Subdomain }}" onsubmit="return confirm('Disconnect this user immediately?');">
+                                        <input type="hidden" name="session_id" value="{{ .SessionID }}">
+                                        <button class="btn btn-danger" type="submit">Kick</button>
+                                    </form>
+                                    {{ else }}
+                                    <span style="color: var(--muted); font-size: 0.75rem;">-</span>
+                                    {{ end }}
+                                </td>
+                            </tr>
+                            {{ end }}
+                        {{ else }}
+                            <tr>
+                                <td colspan="8" style="text-align: center; color: var(--muted); padding: 2rem;">
+                                    No customer passes found matching your search.
+                                </td>
+                            </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Section 2: Package Management (CRUD) -->
+        <div class="section-card">
+            <div class="section-header">
+                <div>
+                    <h2>Internet Packages & Speeds (CRUD)</h2>
+                    <span style="font-size: 0.82rem; color: var(--muted);">Changes appear instantly on the captive portal</span>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Package Name</th>
+                            <th>Price (KES)</th>
+                            <th>Duration</th>
+                            <th>Speed Cap (Up/Down)</th>
+                            <th>Data Limit</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ range .Plans }}
+                        <tr>
+                            <td style="font-weight: 600;">{{ .Name }}</td>
+                            <td>KES {{ .FormattedPrice }}</td>
+                            <td>{{ .FormattedDuration }}</td>
+                            <td>{{ if .SpeedLimit }}{{ .SpeedLimit }}{{ else }}Default{{ end }}</td>
+                            <td>{{ .FormattedDataLimit }}</td>
+                            <td>
+                                <form method="POST" action="/api/plans/delete?tenant={{ $.Subdomain }}" onsubmit="return confirm('Delete this package?');">
+                                    <input type="hidden" name="plan_id" value="{{ .ID }}">
+                                    <button class="btn btn-danger" type="submit">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Create Package Form -->
+            <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px dashed var(--border);">
+                <h3 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.5rem;">+ Create New Internet Package</h3>
+                <form method="POST" action="/api/plans/create?tenant={{ .Subdomain }}">
+                    <div class="create-form-grid">
+                        <div class="form-group">
+                            <label>Package Name</label>
+                            <input class="form-control" type="text" name="name" placeholder="e.g. 3 Hours Fast" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Price (KES)</label>
+                            <input class="form-control" type="number" step="0.5" name="price" placeholder="e.g. 30" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Duration (Minutes)</label>
+                            <input class="form-control" type="number" name="duration" placeholder="e.g. 180" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Speed Limit (MikroTik)</label>
+                            <select class="form-control" name="speed_limit">
+                                <option value="2M/5M">2 Mbps Up / 5 Mbps Down (Standard)</option>
+                                <option value="3M/10M">3 Mbps Up / 10 Mbps Down (Fast)</option>
+                                <option value="5M/20M">5 Mbps Up / 20 Mbps Down (Ultra)</option>
+                                <option value="1M/2M">1 Mbps Up / 2 Mbps Down (Budget)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Data Limit (MB, 0 for Unlimited)</label>
+                            <input class="form-control" type="number" name="data_mb" placeholder="0" value="0">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" style="margin-top: 1rem;" type="submit">Save Package</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Section 3: Self-Service Tenant Settings (Autonomy) -->
+        <div class="section-card">
+            <div class="section-header">
+                <div>
+                    <h2>Branding & Payment Channel Settings</h2>
+                    <span style="font-size: 0.82rem; color: var(--muted);">Control your Wi-Fi name, support phone, and Paybill/Till routing</span>
+                </div>
+            </div>
+
+            <form method="POST" action="/api/tenant/settings?tenant={{ .Subdomain }}">
+                <div class="create-form-grid">
+                    <div class="form-group">
+                        <label>Network / Business Name</label>
+                        <input class="form-control" type="text" name="name" value="{{ .Settings.Name }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Customer Support Phone</label>
+                        <input class="form-control" type="text" name="support_phone" value="{{ .Settings.SupportPhone }}" placeholder="0712 345 678">
+                    </div>
+                    <div class="form-group">
+                        <label>PayHero Channel ID (Your Till/Paybill ID)</label>
+                        <input class="form-control" type="number" name="channel_id" value="{{ .Settings.PayHeroChannelID }}" placeholder="e.g. 6595">
+                    </div>
+                </div>
+                <button class="btn btn-primary" style="margin-top: 1rem;" type="submit">Update Settings</button>
+            </form>
+        </div>
+
+        <!-- Section 4: Registered Routers -->
+        <div class="section-card">
+            <div class="section-header">
+                <div>
+                    <h2>Registered MikroTik Routers</h2>
+                    <span style="font-size: 0.82rem; color: var(--muted);">Hardware connected to this account</span>
+                </div>
+            </div>
+
+            {{ if .Devices }}
+                {{ range .Devices }}
+                <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong>Router MAC:</strong> <span style="font-family: monospace;">{{ .MacAddress }}</span>
+                        </div>
+                        <div>
+                            <span class="badge badge-active">LINKED</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.5rem; font-size: 0.82rem; color: var(--muted);">MikroTik Setup Script (paste into router Terminal):</div>
+                    <pre>{{ .GenerateRouterOSScript $.ServerHost }}</pre>
+                </div>
+                {{ end }}
+            {{ else }}
+                <p style="color: var(--muted); font-size: 0.88rem;">No routers registered yet. Register a device using the API.</p>
+            {{ end }}
+        </div>
+    </div>
+</body>
+</html>

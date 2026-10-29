@@ -1,3 +1,4 @@
+// internal/httpapi/router.go
 package httpapi
 
 import (
@@ -16,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-//go:embed templates/portal.html
+//go:embed templates/portal.html templates/dashboard.html
 var templateFS embed.FS
 
 var portalTemplate = template.Must(template.ParseFS(templateFS, "templates/portal.html"))
@@ -39,7 +40,7 @@ func NewRouter(db *pgxpool.Pool, cfg config.Config) http.Handler {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
 
-	// 2. Public PayHero Webhook Callback (No tenant wrapper needed since external_reference has tenant)
+	// 2. Public PayHero Webhook Callback
 	mux.HandleFunc("/api/payments/callback", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -50,6 +51,54 @@ func NewRouter(db *pgxpool.Pool, cfg config.Config) http.Handler {
 
 	// Tenant-scoped routes
 	tenantMux := http.NewServeMux()
+
+	// Owner Administrative Dashboard (handles both /dashboard and /dashboard/)
+	tenantMux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+		handleDashboard(w, r, db)
+	})
+	tenantMux.HandleFunc("/dashboard/", func(w http.ResponseWriter, r *http.Request) {
+		handleDashboard(w, r, db)
+	})
+
+	// CSV Export
+	tenantMux.HandleFunc("/dashboard/export.csv", func(w http.ResponseWriter, r *http.Request) {
+		handleExportCSV(w, r, db)
+	})
+
+	// Tenant Settings update
+	tenantMux.HandleFunc("/api/tenant/settings", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleUpdateSettings(w, r, db)
+	})
+
+	// Revoke / Kick session
+	tenantMux.HandleFunc("/api/sessions/revoke", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleRevokeSession(w, r, db)
+	})
+
+	// Package CRUD API
+	tenantMux.HandleFunc("/api/plans/create", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleCreatePlan(w, r, db)
+	})
+
+	tenantMux.HandleFunc("/api/plans/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleDeletePlan(w, r, db)
+	})
 
 	// Device registration API
 	tenantMux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +128,7 @@ func NewRouter(db *pgxpool.Pool, cfg config.Config) http.Handler {
 		handleReconnectSession(w, r, db)
 	})
 
-	// Captive portal UI
+	// Captive portal customer UI
 	tenantMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handlePortalHome(w, r, db)
 	})
@@ -116,7 +165,6 @@ func handleDevices(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool) {
 			return
 		}
 
-		// Strip port from r.Host so MikroTik receives a clean IP or domain
 		host := r.Host
 		if colonIdx := strings.Index(host, ":"); colonIdx != -1 {
 			host = host[:colonIdx]
