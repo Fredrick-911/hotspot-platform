@@ -21,37 +21,33 @@
         body { background-color: var(--bg); color: var(--text); padding: 1.5rem; line-height: 1.5; }
         .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
         
-        /* Top Navigation Header */
-        .top-header { display: flex; justify-content: space-between; align-items: center; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }
+        .top-header { display: flex; justify-content: space-between; align-items: center; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03); flex-wrap: wrap; gap: 1rem; }
         .brand { display: flex; align-items: center; gap: 0.85rem; }
         .brand-icon { width: 44px; height: 44px; background: #eff6ff; color: var(--primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.35rem; }
         .brand h1 { font-size: 1.35rem; font-weight: 700; }
         .brand span { font-size: 0.82rem; color: var(--muted); }
-        .portal-link { font-size: 0.85rem; color: var(--primary); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 0.35rem; }
+        .header-actions { display: flex; gap: 0.65rem; align-items: center; }
 
-        /* Metric Cards */
         .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
         .metric-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
         .metric-title { font-size: 0.82rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
         .metric-val { font-size: 1.85rem; font-weight: 800; margin-top: 0.4rem; }
         .metric-val.green { color: var(--green); }
 
-        /* Sections */
         .section-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; }
         .section-header h2 { font-size: 1.15rem; font-weight: 700; }
 
-        /* Search Box */
         .search-form { display: flex; gap: 0.5rem; width: 100%; max-width: 420px; }
         .search-input { flex: 1; padding: 0.6rem 0.9rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.88rem; outline: none; }
         .search-input:focus { border-color: var(--primary); }
         .btn { padding: 0.6rem 1.1rem; border-radius: 8px; font-size: 0.88rem; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; }
         .btn-primary { background: var(--primary); color: #fff; }
         .btn-primary:hover { background: var(--primary-hover); }
-        .btn-danger { background: #fee2e2; color: #dc2626; padding: 0.4rem 0.75rem; font-size: 0.8rem; }
+        .btn-secondary { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); }
+        .btn-danger { background: #fee2e2; color: #dc2626; padding: 0.35rem 0.7rem; font-size: 0.8rem; }
         .btn-danger:hover { background: #fecaca; }
 
-        /* Tables */
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left; }
         th { padding: 0.75rem 1rem; border-bottom: 1.5px solid var(--border); color: var(--muted); font-size: 0.78rem; text-transform: uppercase; font-weight: 600; }
@@ -62,13 +58,10 @@
         .badge-active { background: #dcfce7; color: #15803d; }
         .badge-expired { background: #f1f5f9; color: var(--muted); }
 
-        /* Package Form Modal/Box */
         .create-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.85rem; margin-top: 1rem; }
         .form-group label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-bottom: 0.3rem; }
         .form-control { width: 100%; padding: 0.6rem 0.8rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.88rem; outline: none; }
         .form-control:focus { border-color: var(--primary); }
-
-        /* Code block for MikroTik Script */
         pre { background: #0f172a; color: #f8fafc; padding: 1.25rem; border-radius: 8px; font-size: 0.82rem; overflow-x: auto; line-height: 1.45; font-family: monospace; margin-top: 0.75rem; }
     </style>
 </head>
@@ -83,7 +76,10 @@
                     <span>Owner Administrative Dashboard</span>
                 </div>
             </div>
-            <a class="portal-link" href="/?tenant={{ .Subdomain }}" target="_blank">View Customer Captive Portal ↗</a>
+            <div class="header-actions">
+                <a class="btn btn-secondary" href="/dashboard/export.csv?tenant={{ .Subdomain }}">📥 Export CSV</a>
+                <a class="btn btn-primary" href="/?tenant={{ .Subdomain }}" target="_blank">Open Customer Portal ↗</a>
+            </div>
         </div>
 
         <!-- Metric KPI Cards -->
@@ -107,14 +103,14 @@
             <div class="section-header">
                 <div>
                     <h2>Customer Support & Active Passes</h2>
-                    <span style="font-size: 0.82rem; color: var(--muted);">Look up customer PINs, active passes, and payment receipts</span>
+                    <span style="font-size: 0.82rem; color: var(--muted);">Look up customer PINs, remaining time, or revoke access</span>
                 </div>
                 <form class="search-form" method="GET" action="/dashboard">
                     <input type="hidden" name="tenant" value="{{ .Subdomain }}">
                     <input class="search-input" type="text" name="q" value="{{ .SearchQuery }}" placeholder="Search phone, receipt, or PIN...">
                     <button class="btn btn-primary" type="submit">Search</button>
                     {{ if .SearchQuery }}
-                    <a class="btn" style="background:#e2e8f0; color:#334155;" href="/dashboard?tenant={{ .Subdomain }}">Clear</a>
+                    <a class="btn btn-secondary" href="/dashboard?tenant={{ .Subdomain }}">Clear</a>
                     {{ end }}
                 </form>
             </div>
@@ -130,6 +126,7 @@
                             <th>Wi-Fi PIN</th>
                             <th>Time Left</th>
                             <th>Status</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -149,11 +146,21 @@
                                     <span class="badge badge-expired">EXPIRED</span>
                                     {{ end }}
                                 </td>
+                                <td>
+                                    {{ if eq .Status "ACTIVE" }}
+                                    <form method="POST" action="/api/sessions/revoke?tenant={{ $.Subdomain }}" onsubmit="return confirm('Disconnect this user immediately?');">
+                                        <input type="hidden" name="session_id" value="{{ .SessionID }}">
+                                        <button class="btn btn-danger" type="submit">Kick</button>
+                                    </form>
+                                    {{ else }}
+                                    <span style="color: var(--muted); font-size: 0.75rem;">-</span>
+                                    {{ end }}
+                                </td>
                             </tr>
                             {{ end }}
                         {{ else }}
                             <tr>
-                                <td colspan="7" style="text-align: center; color: var(--muted); padding: 2rem;">
+                                <td colspan="8" style="text-align: center; color: var(--muted); padding: 2rem;">
                                     No customer passes found matching your search.
                                 </td>
                             </tr>
@@ -193,7 +200,7 @@
                             <td>{{ if .SpeedLimit }}{{ .SpeedLimit }}{{ else }}Default{{ end }}</td>
                             <td>{{ .FormattedDataLimit }}</td>
                             <td>
-                                <form method="POST" action="/api/plans/delete?tenant={{ $.Subdomain }}" onsubmit="return confirm('Are you sure you want to delete this package?');">
+                                <form method="POST" action="/api/plans/delete?tenant={{ $.Subdomain }}" onsubmit="return confirm('Delete this package?');">
                                     <input type="hidden" name="plan_id" value="{{ .ID }}">
                                     <button class="btn btn-danger" type="submit">Delete</button>
                                 </form>
@@ -240,7 +247,35 @@
             </div>
         </div>
 
-        <!-- Section 3: Registered Routers & Setup Scripts -->
+        <!-- Section 3: Self-Service Tenant Settings (Autonomy) -->
+        <div class="section-card">
+            <div class="section-header">
+                <div>
+                    <h2>Branding & Payment Channel Settings</h2>
+                    <span style="font-size: 0.82rem; color: var(--muted);">Control your Wi-Fi name, support phone, and Paybill/Till routing</span>
+                </div>
+            </div>
+
+            <form method="POST" action="/api/tenant/settings?tenant={{ .Subdomain }}">
+                <div class="create-form-grid">
+                    <div class="form-group">
+                        <label>Network / Business Name</label>
+                        <input class="form-control" type="text" name="name" value="{{ .Settings.Name }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Customer Support Phone</label>
+                        <input class="form-control" type="text" name="support_phone" value="{{ .Settings.SupportPhone }}" placeholder="0712 345 678">
+                    </div>
+                    <div class="form-group">
+                        <label>PayHero Channel ID (Your Till/Paybill ID)</label>
+                        <input class="form-control" type="number" name="channel_id" value="{{ .Settings.PayHeroChannelID }}" placeholder="e.g. 6595">
+                    </div>
+                </div>
+                <button class="btn btn-primary" style="margin-top: 1rem;" type="submit">Update Settings</button>
+            </form>
+        </div>
+
+        <!-- Section 4: Registered Routers -->
         <div class="section-card">
             <div class="section-header">
                 <div>

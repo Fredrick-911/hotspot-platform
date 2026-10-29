@@ -52,9 +52,35 @@ func NewRouter(db *pgxpool.Pool, cfg config.Config) http.Handler {
 	// Tenant-scoped routes
 	tenantMux := http.NewServeMux()
 
-	// Owner Administrative Dashboard
+	// Owner Administrative Dashboard (handles both /dashboard and /dashboard/)
 	tenantMux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		handleDashboard(w, r, db)
+	})
+	tenantMux.HandleFunc("/dashboard/", func(w http.ResponseWriter, r *http.Request) {
+		handleDashboard(w, r, db)
+	})
+
+	// CSV Export
+	tenantMux.HandleFunc("/dashboard/export.csv", func(w http.ResponseWriter, r *http.Request) {
+		handleExportCSV(w, r, db)
+	})
+
+	// Tenant Settings update
+	tenantMux.HandleFunc("/api/tenant/settings", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleUpdateSettings(w, r, db)
+	})
+
+	// Revoke / Kick session
+	tenantMux.HandleFunc("/api/sessions/revoke", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleRevokeSession(w, r, db)
 	})
 
 	// Package CRUD API
@@ -102,7 +128,7 @@ func NewRouter(db *pgxpool.Pool, cfg config.Config) http.Handler {
 		handleReconnectSession(w, r, db)
 	})
 
-	// Captive portal UI
+	// Captive portal customer UI
 	tenantMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handlePortalHome(w, r, db)
 	})
