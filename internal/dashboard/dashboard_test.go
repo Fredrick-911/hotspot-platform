@@ -59,8 +59,16 @@ func TestCustomerSession_TimeRemaining(t *testing.T) {
 }
 
 func TestStats_FormattedRevenue(t *testing.T) {
-	s := Stats{TodayRevenueCents: 25000}
-	if got := s.FormattedRevenue(); got != "250.00" {
-		t.Errorf("FormattedRevenue() = %v, want 250.00", got)
+	s := Stats{
+		TodayRevenueCents: 25000,
+		TotalRevenueCents: 150000,
+	}
+
+	if got := s.FormattedTodayRevenue(); got != "250.00" {
+		t.Errorf("FormattedTodayRevenue() = %v, want 250.00", got)
+	}
+
+	if got := s.FormattedTotalRevenue(); got != "1500.00" {
+		t.Errorf("FormattedTotalRevenue() = %v, want 1500.00", got)
 	}
 }

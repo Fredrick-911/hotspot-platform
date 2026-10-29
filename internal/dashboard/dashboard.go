@@ -17,13 +17,24 @@ import (
 // Stats holds real-time revenue and network health metrics.
 type Stats struct {
 	TodayRevenueCents int
+	TotalRevenueCents int
 	ActiveSessions    int
 	TotalDevices      int
 }
 
-// FormattedRevenue returns earnings in KES (e.g. 1450.00).
-func (s Stats) FormattedRevenue() string {
+// FormattedTodayRevenue returns earnings in KES for today.
+func (s Stats) FormattedTodayRevenue() string {
 	return fmt.Sprintf("%.2f", float64(s.TodayRevenueCents)/100.0)
+}
+
+// FormattedTotalRevenue returns all-time earnings in KES.
+func (s Stats) FormattedTotalRevenue() string {
+	return fmt.Sprintf("%.2f", float64(s.TotalRevenueCents)/100.0)
+}
+
+// FormattedRevenue is a compatibility alias for FormattedTodayRevenue.
+func (s Stats) FormattedRevenue() string {
+	return s.FormattedTodayRevenue()
 }
 
 // CustomerSession represents a combined view of payment, session, and plan for customer support.
@@ -45,9 +56,14 @@ func (cs CustomerSession) FormattedAmount() string {
 	return fmt.Sprintf("%.2f", float64(cs.AmountCents)/100.0)
 }
 
+// IsActuallyActive returns true only if status is ACTIVE and time has not run out.
+func (cs CustomerSession) IsActuallyActive() bool {
+	return cs.Status == "ACTIVE" && time.Now().Before(cs.ExpiresAt)
+}
+
 // TimeRemaining returns a human-readable duration countdown until pass expires.
 func (cs CustomerSession) TimeRemaining() string {
-	if cs.Status != "ACTIVE" {
+	if !cs.IsActuallyActive() {
 		return "Expired"
 	}
 
@@ -92,17 +108,13 @@ func UpdateTenantSettings(ctx context.Context, db *pgxpool.Pool, tenantID, name,
 
 // RevokeSession manually kicks a customer pass.
 func RevokeSession(ctx context.Context, db *pgxpool.Pool, tenantID, sessionID string) error {
-	// Find username to clean up from FreeRADIUS
 	var username string
 	err := db.QueryRow(ctx, `SELECT username FROM sessions WHERE id = $1 AND tenant_id = $2`, sessionID, tenantID).Scan(&username)
 	if err != nil {
 		return err
 	}
 
-	// 1. Mark session EXPIRED in database
 	_, _ = db.Exec(ctx, `UPDATE sessions SET status = 'EXPIRED', expires_at = NOW() WHERE id = $1`, sessionID)
-
-	// 2. Remove credentials from FreeRADIUS radcheck so router rejects reconnects
 	_, _ = db.Exec(ctx, `DELETE FROM radcheck WHERE username = $1`, username)
 
 	return nil
@@ -112,15 +124,29 @@ func RevokeSession(ctx context.Context, db *pgxpool.Pool, tenantID, sessionID st
 func GetStats(ctx context.Context, db *pgxpool.Pool, tenantID string) (Stats, error) {
 	var s Stats
 
-	queryRevenue := `
+	// 1. Today's revenue (aligned with Africa/Nairobi timezone)
+	queryToday := `
 		SELECT COALESCE(SUM(amount_cents), 0)
 		FROM payments
-		WHERE tenant_id = $1 AND status = 'SUCCESS' AND created_at >= CURRENT_DATE
+		WHERE tenant_id = $1 
+		  AND status = 'SUCCESS' 
+		  AND created_at >= (NOW() AT TIME ZONE 'Africa/Nairobi')::date
 	`
-	if err := db.QueryRow(ctx, queryRevenue, tenantID).Scan(&s.TodayRevenueCents); err != nil {
-		return s, fmt.Errorf("failed to calculate revenue: %w", err)
+	if err := db.QueryRow(ctx, queryToday, tenantID).Scan(&s.TodayRevenueCents); err != nil {
+		return s, fmt.Errorf("failed to calculate today's revenue: %w", err)
 	}
 
+	// 2. All-time total revenue
+	queryTotal := `
+		SELECT COALESCE(SUM(amount_cents), 0)
+		FROM payments
+		WHERE tenant_id = $1 AND status = 'SUCCESS'
+	`
+	if err := db.QueryRow(ctx, queryTotal, tenantID).Scan(&s.TotalRevenueCents); err != nil {
+		return s, fmt.Errorf("failed to calculate total revenue: %w", err)
+	}
+
+	// 3. Active online sessions
 	querySessions := `
 		SELECT COUNT(*)
 		FROM sessions
@@ -130,6 +156,7 @@ func GetStats(ctx context.Context, db *pgxpool.Pool, tenantID string) (Stats, er
 		return s, fmt.Errorf("failed to count active sessions: %w", err)
 	}
 
+	// 4. Registered devices
 	queryDevices := `
 		SELECT COUNT(*)
 		FROM devices
@@ -202,10 +229,14 @@ func GenerateCSVExport(ctx context.Context, db *pgxpool.Pool, tenantID string) (
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
 
-	// Write CSV Header
 	_ = writer.Write([]string{"Date", "Phone Number", "M-Pesa Receipt", "Package Name", "Amount (KES)", "Wi-Fi PIN", "Status"})
 
 	for _, s := range sessions {
+		statusStr := "EXPIRED"
+		if s.IsActuallyActive() {
+			statusStr = "ACTIVE"
+		}
+
 		_ = writer.Write([]string{
 			s.CreatedAt.Format("2006-01-02 15:04:05"),
 			s.PhoneNumber,
@@ -213,7 +244,7 @@ func GenerateCSVExport(ctx context.Context, db *pgxpool.Pool, tenantID string) (
 			s.PlanName,
 			s.FormattedAmount(),
 			s.Pin,
-			s.Status,
+			statusStr,
 		})
 	}
 
