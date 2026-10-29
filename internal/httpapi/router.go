@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-//go:embed templates/portal.html templates/dashboard.html
+//go:embed templates/portal.html templates/dashboard.html templates/status.html
 var templateFS embed.FS
 
 var portalTemplate = template.Must(template.ParseFS(templateFS, "templates/portal.html"))
@@ -52,7 +52,15 @@ func NewRouter(db *pgxpool.Pool, cfg config.Config) http.Handler {
 	// Tenant-scoped routes
 	tenantMux := http.NewServeMux()
 
-	// Owner Administrative Dashboard (handles both /dashboard and /dashboard/)
+	// Customer Status & Countdown Page
+	tenantMux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		handleStatusPage(w, r, db)
+	})
+	tenantMux.HandleFunc("/status/", func(w http.ResponseWriter, r *http.Request) {
+		handleStatusPage(w, r, db)
+	})
+
+	// Owner Administrative Dashboard
 	tenantMux.HandleFunc("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		handleDashboard(w, r, db)
 	})

@@ -1,0 +1,148 @@
+<!-- internal/httpapi/templates/status.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{{ .Tenant.Name }} — My Connection Status</title>
+    <style>
+        :root {
+            --primary: #16a34a;
+            --primary-hover: #15803d;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --radius: 14px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg); color: var(--text-main); display: flex; justify-content: center; min-height: 100vh; padding: 1.25rem; }
+        .status-card { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 1.25rem; }
+        .header { text-align: center; padding: 1.25rem 0 0.5rem; }
+        .wifi-icon { width: 44px; height: 44px; background: #dcfce7; color: var(--primary); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 0.75rem; font-size: 1.25rem; }
+        .header h1 { font-size: 1.35rem; font-weight: 700; }
+        .header p { font-size: 0.9rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+        .session-box { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 1.5rem; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .status-pill { display: inline-block; background: #dcfce7; color: #15803d; font-size: 0.8rem; font-weight: 700; padding: 0.25rem 0.75rem; border-radius: 999px; text-transform: uppercase; margin-bottom: 0.85rem; letter-spacing: 0.5px; }
+        
+        .timer-display { font-size: 2.75rem; font-weight: 800; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; color: var(--text-main); letter-spacing: 2px; line-height: 1.1; margin: 0.5rem 0; }
+        .timer-sub { font-size: 0.82rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); text-align: left; }
+        .detail-item span { display: block; font-size: 0.78rem; color: var(--text-muted); font-weight: 600; }
+        .detail-item strong { font-size: 0.95rem; color: var(--text-main); }
+
+        .copy-pin-card { background: #f0fdf4; border: 1.5px dashed #86efac; border-radius: 10px; padding: 0.65rem 0.85rem; margin-top: 1.25rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .pin-number { font-family: monospace; font-size: 1.25rem; font-weight: 800; color: var(--primary); letter-spacing: 3px; }
+
+        .action-btns { display: flex; flex-direction: column; gap: 0.65rem; margin-top: 1.5rem; }
+        .btn { width: 100%; padding: 0.75rem; border-radius: 8px; font-weight: 600; font-size: 0.9rem; border: none; cursor: pointer; text-decoration: none; text-align: center; display: block; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: #0f172a; color: #fff; }
+
+        .search-box { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 1.5rem; text-align: center; }
+        .search-input { width: 100%; padding: 0.75rem 1rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 1rem; outline: none; margin: 0.85rem 0; text-align: center; }
+        .search-input:focus { border-color: var(--primary); }
+    </style>
+</head>
+<body>
+    <div class="status-card">
+        <div class="header">
+            <div class="wifi-icon">📶</div>
+            <h1>{{ .Tenant.Name }}</h1>
+            <p>Wi-Fi Connection & Data Status</p>
+        </div>
+
+        {{ if .Detail }}
+        <div class="session-box">
+            <span class="status-pill">● Internet Active</span>
+            <div class="timer-display" id="countdown">--:--:--</div>
+            <div class="timer-sub">Time Remaining</div>
+
+            <div class="copy-pin-card" onclick="copyPin('{{ .Detail.Pin }}')" title="Tap to copy PIN">
+                <div>
+                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Access PIN (Keep to reconnect):</span>
+                    <span class="pin-number" id="pinDisplay">{{ .Detail.Pin }}</span>
+                </div>
+                <span id="copyIcon" style="font-size: 1.1rem;">📋</span>
+            </div>
+
+            <div class="details-grid">
+                <div class="detail-item">
+                    <span>Package</span>
+                    <strong>{{ .Detail.PlanName }}</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Speed Cap</span>
+                    <strong>{{ .Detail.SpeedLimit }}</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Connected As</span>
+                    <strong>{{ .Detail.PhoneNumber }}</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Expires At</span>
+                    <strong>{{ .Detail.ExpiresAt.Format "15:04" }}</strong>
+                </div>
+            </div>
+
+            <div class="action-btns">
+                <a class="btn btn-primary" href="/?tenant={{ .Tenant.Subdomain }}">Buy Another Pass / Top Up</a>
+                <a class="btn btn-secondary" href="https://www.google.com" target="_blank">Browse Internet</a>
+            </div>
+        </div>
+
+        <script>
+            let totalSeconds = {{ .Detail.SecondsLeft }};
+            const timerEl = document.getElementById('countdown');
+
+            function updateTimer() {
+                if (totalSeconds <= 0) {
+                    timerEl.innerText = "00:00:00";
+                    timerEl.style.color = "#dc2626";
+                    return;
+                }
+
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+
+                const pad = (n) => String(n).padStart(2, '0');
+                timerEl.innerText = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+                totalSeconds--;
+            }
+
+            updateTimer();
+            setInterval(updateTimer, 1000);
+
+            function copyPin(pin) {
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(pin).then(() => {
+                        document.getElementById('copyIcon').innerText = '✅';
+                        setTimeout(() => document.getElementById('copyIcon').innerText = '📋', 2000);
+                    });
+                }
+            }
+        </script>
+
+        {{ else }}
+        <!-- Search Session Box -->
+        <div class="search-box">
+            <h2 style="font-size: 1.15rem; margin-bottom: 0.35rem;">Check Your Pass Status</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Enter your M-Pesa phone number or 4-digit PIN:</p>
+            
+            <form method="GET" action="/status">
+                <input type="hidden" name="tenant" value="{{ .Tenant.Subdomain }}">
+                <input class="search-input" type="text" name="q" placeholder="e.g. 0712345678 or 5709" required autofocus>
+                <button class="btn btn-primary" type="submit">Check My Time</button>
+            </form>
+
+            <a href="/?tenant={{ .Tenant.Subdomain }}" style="display: block; margin-top: 1.25rem; font-size: 0.85rem; color: var(--text-muted); text-decoration: none;">← Return to Packages</a>
+        </div>
+        {{ end }}
+    </div>
+</body>
+</html>
