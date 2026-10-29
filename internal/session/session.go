@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,6 +35,7 @@ func GeneratePIN() string {
 }
 
 // ProvisionUser creates the session record AND writes directly to FreeRADIUS tables.
+// Enforces Simultaneous-Use := 1 so users cannot share PINs across multiple devices.
 func ProvisionUser(ctx context.Context, db *pgxpool.Pool, tenantID, planID, paymentID, phone string, mac *string, durationMinutes int, speedLimit *string, dataLimitBytes *int64) (*Session, error) {
 	tx, err := db.Begin(ctx)
 	if err != nil {
@@ -47,7 +49,7 @@ func ProvisionUser(ctx context.Context, db *pgxpool.Pool, tenantID, planID, paym
 	expiresAt := now.Add(time.Duration(durationMinutes) * time.Minute)
 	durationSeconds := durationMinutes * 60
 
-	// 1. Insert into our application sessions table
+	// 1. Insert into application sessions table
 	var sess Session
 	querySession := `
 		INSERT INTO sessions (tenant_id, plan_id, payment_id, phone_number, mac_address, username, password, duration_minutes, starts_at, expires_at, status)
@@ -62,21 +64,29 @@ func ProvisionUser(ctx context.Context, db *pgxpool.Pool, tenantID, planID, paym
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	// 2. FreeRADIUS Provisioning: radcheck (Credentials)
-	// Delete any old credentials for this phone first
+	// 2. FreeRADIUS Provisioning: Clean up any old entries for this phone
 	_, _ = tx.Exec(ctx, "DELETE FROM radcheck WHERE username = $1", username)
 	_, _ = tx.Exec(ctx, "DELETE FROM radreply WHERE username = $1", username)
 
+	// radcheck: Password
 	_, err = tx.Exec(ctx, `
 		INSERT INTO radcheck (username, attribute, op, value)
 		VALUES ($1, 'Cleartext-Password', ':=', $2)
 	`, username, pin)
 	if err != nil {
-		return nil, fmt.Errorf("failed to write radcheck: %w", err)
+		return nil, fmt.Errorf("failed to write radcheck password: %w", err)
+	}
+
+	// radcheck: Anti-Password Sharing (Simultaneous-Use := 1)
+	_, err = tx.Exec(ctx, `
+		INSERT INTO radcheck (username, attribute, op, value)
+		VALUES ($1, 'Simultaneous-Use', ':=', '1')
+	`, username)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write Simultaneous-Use check: %w", err)
 	}
 
 	// 3. FreeRADIUS Provisioning: radreply (Limits: Time, Speed, Data)
-	// Session timeout in seconds
 	_, err = tx.Exec(ctx, `
 		INSERT INTO radreply (username, attribute, op, value)
 		VALUES ($1, 'Session-Timeout', ':=', $2)
@@ -85,7 +95,6 @@ func ProvisionUser(ctx context.Context, db *pgxpool.Pool, tenantID, planID, paym
 		return nil, fmt.Errorf("failed to write Session-Timeout to radreply: %w", err)
 	}
 
-	// MikroTik Rate Limit (Speed cap)
 	if speedLimit != nil && *speedLimit != "" {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO radreply (username, attribute, op, value)
@@ -96,7 +105,6 @@ func ProvisionUser(ctx context.Context, db *pgxpool.Pool, tenantID, planID, paym
 		}
 	}
 
-	// MikroTik Data Cap (if set)
 	if dataLimitBytes != nil && *dataLimitBytes > 0 {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO radreply (username, attribute, op, value)
@@ -136,10 +144,57 @@ func ReconnectByPhoneOrPIN(ctx context.Context, db *pgxpool.Pool, tenantID, phon
 		return nil, fmt.Errorf("no active session found: %w", err)
 	}
 
-	// Update with new MAC address if provided
 	if newMAC != nil && *newMAC != "" {
 		_, _ = db.Exec(ctx, "UPDATE sessions SET mac_address = $1 WHERE id = $2", *newMAC, sess.ID)
 	}
 
 	return &sess, nil
+}
+
+// ActiveSessionDetail provides rich data for the customer self-service status page.
+type ActiveSessionDetail struct {
+	SessionID       string
+	PhoneNumber     string
+	PlanName        string
+	SpeedLimit      string
+	Pin             string
+	ExpiresAt       time.Time
+	SecondsLeft     int64
+	DurationMinutes int
+}
+
+// GetActiveSessionDetail looks up an active session by phone, PIN, or MAC address.
+func GetActiveSessionDetail(ctx context.Context, db *pgxpool.Pool, tenantID, queryParam string) (*ActiveSessionDetail, error) {
+	cleaned := strings.TrimSpace(queryParam)
+	if cleaned == "" {
+		return nil, fmt.Errorf("empty query")
+	}
+
+	query := `
+		SELECT s.id::text, s.phone_number, pl.name, COALESCE(pl.speed_limit, 'Standard'),
+		       s.password, s.expires_at, EXTRACT(EPOCH FROM (s.expires_at - NOW()))::bigint, s.duration_minutes
+		FROM sessions s
+		JOIN plans pl ON pl.id = s.plan_id
+		WHERE s.tenant_id = $1
+		  AND (s.phone_number = $2 OR s.password = $2 OR s.mac_address = $2)
+		  AND s.status = 'ACTIVE'
+		  AND s.expires_at > NOW()
+		ORDER BY s.expires_at DESC
+		LIMIT 1
+	`
+
+	var d ActiveSessionDetail
+	err := db.QueryRow(ctx, query, tenantID, cleaned).Scan(
+		&d.SessionID, &d.PhoneNumber, &d.PlanName, &d.SpeedLimit,
+		&d.Pin, &d.ExpiresAt, &d.SecondsLeft, &d.DurationMinutes,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if d.SecondsLeft < 0 {
+		d.SecondsLeft = 0
+	}
+
+	return &d, nil
 }
