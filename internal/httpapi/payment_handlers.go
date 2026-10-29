@@ -1,3 +1,4 @@
+// internal/httpapi/payment_handlers.go
 package httpapi
 
 import (
@@ -37,7 +38,7 @@ func handleInitiatePayment(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 		return
 	}
 
-	// Look up the chosen plan
+	// 1. Look up plan
 	var planName string
 	var priceCents, durationMinutes int
 	var speedLimit *string
@@ -51,10 +52,18 @@ func handleInitiatePayment(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 		return
 	}
 
+	// 2. Check if tenant has their own PayHero Channel ID configured
+	channelID := cfg.PayHeroChannelID
+	var tenantChannelID int
+	_ = db.QueryRow(r.Context(), `SELECT COALESCE(payhero_channel_id, 0) FROM tenants WHERE id = $1`, t.ID).Scan(&tenantChannelID)
+	if tenantChannelID > 0 {
+		channelID = tenantChannelID
+	}
+
 	externalRef := fmt.Sprintf("WIFI-%s", strings.ToUpper(uuid.New().String()[:12]))
 	amountShillings := priceCents / 100
 
-	// 1. Record pending payment in database
+	// 3. Record pending payment in database
 	var paymentID string
 	err = db.QueryRow(r.Context(), `
 		INSERT INTO payments (tenant_id, plan_id, phone_number, amount_cents, external_reference, status)
@@ -67,9 +76,9 @@ func handleInitiatePayment(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 		return
 	}
 
-	// 2. Call PayHero API (if configured)
-	if cfg.PayHeroUsername != "" && cfg.PayHeroChannelID > 0 {
-		client := payment.NewClient(cfg.PayHeroUsername, cfg.PayHeroPassword, cfg.PayHeroChannelID)
+	// 4. Call PayHero API
+	if cfg.PayHeroUsername != "" && channelID > 0 {
+		client := payment.NewClient(cfg.PayHeroUsername, cfg.PayHeroPassword, channelID)
 		callbackURL := fmt.Sprintf("%s/api/payments/callback", cfg.BaseURL)
 
 		_, err = client.InitiateSTK(r.Context(), normPhone, amountShillings, externalRef, callbackURL)
@@ -79,7 +88,7 @@ func handleInitiatePayment(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 			return
 		}
 	} else {
-		slog.Warn("PayHero not configured in .env, payment created in dev-mock mode", "payment_id", paymentID)
+		slog.Warn("PayHero not configured, running in dev-mock mode", "payment_id", paymentID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -94,7 +103,7 @@ func handleInitiatePayment(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 
 // PayHeroCallbackPayload represents the webhook sent by PayHero upon payment completion.
 type payHeroCallbackPayload struct {
-	Status   string `json:"status"` // "Success" or "Failed"
+	Status   string `json:"status"`
 	Response struct {
 		Amount             int    `json:"Amount"`
 		Phone              string `json:"Phone"`
@@ -105,7 +114,6 @@ type payHeroCallbackPayload struct {
 	} `json:"response"`
 }
 
-// handlePaymentCallback processes the asynchronous webhook from PayHero.
 func handlePaymentCallback(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool) {
 	var payload payHeroCallbackPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -119,7 +127,6 @@ func handlePaymentCallback(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 		return
 	}
 
-	// Find the matching payment
 	var paymentID, tenantID, planID, phone string
 	var durationMinutes int
 	var speedLimit *string
@@ -132,19 +139,17 @@ func handlePaymentCallback(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 	`, extRef).Scan(&paymentID, &tenantID, &planID, &phone, &durationMinutes, &speedLimit, &dataLimitBytes)
 	if err != nil {
 		slog.Warn("callback received for unknown or resolved payment", "ref", extRef, "err", err)
-		w.WriteHeader(http.StatusOK) // Acknowledge to PayHero so it stops retrying
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
 	if payload.Response.ResultCode == 0 || strings.EqualFold(payload.Status, "Success") {
-		// Update payment to SUCCESS
 		_, _ = db.Exec(r.Context(), `
 			UPDATE payments 
 			SET status = 'SUCCESS', mpesa_receipt = $1, result_desc = $2, updated_at = NOW()
 			WHERE id = $3
 		`, payload.Response.MpesaReceiptNumber, payload.Response.ResultDesc, paymentID)
 
-		// Provision FreeRADIUS session
 		sess, err := session.ProvisionUser(r.Context(), db, tenantID, planID, paymentID, phone, nil, durationMinutes, speedLimit, dataLimitBytes)
 		if err != nil {
 			slog.Error("failed to provision user in FreeRADIUS after payment", "err", err)
@@ -152,7 +157,6 @@ func handlePaymentCallback(w http.ResponseWriter, r *http.Request, db *pgxpool.P
 			slog.Info("user successfully provisioned in FreeRADIUS", "username", sess.Username, "pin", sess.Password)
 		}
 	} else {
-		// Mark payment FAILED
 		_, _ = db.Exec(r.Context(), `
 			UPDATE payments 
 			SET status = 'FAILED', result_desc = $1, updated_at = NOW()
@@ -185,8 +189,15 @@ func handleCheckPaymentStatus(w http.ResponseWriter, r *http.Request, db *pgxpoo
 	}
 
 	// Active Fallback: If still PENDING, verify directly with PayHero API
-	if status == "PENDING" && cfg.PayHeroUsername != "" && cfg.PayHeroChannelID > 0 {
-		client := payment.NewClient(cfg.PayHeroUsername, cfg.PayHeroPassword, cfg.PayHeroChannelID)
+	if status == "PENDING" && cfg.PayHeroUsername != "" {
+		channelID := cfg.PayHeroChannelID
+		var tenantChannelID int
+		_ = db.QueryRow(r.Context(), `SELECT COALESCE(payhero_channel_id, 0) FROM tenants WHERE id = $1`, tenantID).Scan(&tenantChannelID)
+		if tenantChannelID > 0 {
+			channelID = tenantChannelID
+		}
+
+		client := payment.NewClient(cfg.PayHeroUsername, cfg.PayHeroPassword, channelID)
 		tx, err := client.FindInboundPayment(r.Context(), extRef)
 		if err == nil && tx != nil {
 			cmdTag, err := db.Exec(r.Context(), `
@@ -215,7 +226,6 @@ func handleCheckPaymentStatus(w http.ResponseWriter, r *http.Request, db *pgxpoo
 		resp["receipt"] = *receipt
 	}
 
-	// If successful and pin wasn't populated from active check, load from DB
 	if status == "SUCCESS" {
 		if pin == "" {
 			_ = db.QueryRow(r.Context(), `SELECT username, password FROM sessions WHERE payment_id = $1`, paymentID).Scan(&username, &pin)
@@ -233,7 +243,6 @@ type reconnectReq struct {
 	MacAddress *string `json:"mac_address,omitempty"`
 }
 
-// handleReconnectSession allows users with active sessions to reconnect without paying again.
 func handleReconnectSession(w http.ResponseWriter, r *http.Request, db *pgxpool.Pool) {
 	t := tenant.FromContext(r.Context())
 

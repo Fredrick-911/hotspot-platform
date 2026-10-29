@@ -28,11 +28,12 @@
         .brand span { font-size: 0.82rem; color: var(--muted); }
         .header-actions { display: flex; gap: 0.65rem; align-items: center; }
 
-        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
         .metric-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
         .metric-title { font-size: 0.82rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-        .metric-val { font-size: 1.85rem; font-weight: 800; margin-top: 0.4rem; }
+        .metric-val { font-size: 1.75rem; font-weight: 800; margin-top: 0.4rem; }
         .metric-val.green { color: var(--green); }
+        .metric-sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; }
 
         .section-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; }
@@ -86,15 +87,18 @@
         <div class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-title">Today's Revenue</div>
-                <div class="metric-val green">KES {{ .Stats.FormattedRevenue }}</div>
+                <div class="metric-val green">KES {{ .Stats.FormattedTodayRevenue }}</div>
+                <div class="metric-sub">Total All-Time: KES {{ .Stats.FormattedTotalRevenue }}</div>
             </div>
             <div class="metric-card">
                 <div class="metric-title">Active Online Users</div>
                 <div class="metric-val">{{ .Stats.ActiveSessions }}</div>
+                <div class="metric-sub">Currently Authenticated</div>
             </div>
             <div class="metric-card">
                 <div class="metric-title">Connected Routers</div>
                 <div class="metric-val">{{ .Stats.TotalDevices }}</div>
+                <div class="metric-sub">Online MikroTik Hardware</div>
             </div>
         </div>
 
@@ -140,14 +144,14 @@
                                 <td><span class="pin-pill">{{ .Pin }}</span></td>
                                 <td>{{ .TimeRemaining }}</td>
                                 <td>
-                                    {{ if eq .Status "ACTIVE" }}
+                                    {{ if .IsActuallyActive }}
                                     <span class="badge badge-active">ACTIVE</span>
                                     {{ else }}
                                     <span class="badge badge-expired">EXPIRED</span>
                                     {{ end }}
                                 </td>
                                 <td>
-                                    {{ if eq .Status "ACTIVE" }}
+                                    {{ if .IsActuallyActive }}
                                     <form method="POST" action="/api/sessions/revoke?tenant={{ $.Subdomain }}" onsubmit="return confirm('Disconnect this user immediately?');">
                                         <input type="hidden" name="session_id" value="{{ .SessionID }}">
                                         <button class="btn btn-danger" type="submit">Kick</button>
@@ -291,12 +295,12 @@
                         <div>
                             <strong>Router MAC:</strong> <span style="font-family: monospace;">{{ .MacAddress }}</span>
                         </div>
-                        <div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
                             <span class="badge badge-active">LINKED</span>
+                            <button class="btn btn-secondary" style="padding: 0.3rem 0.65rem; font-size: 0.78rem;" onclick="copyScript('script-{{ .ID }}')">📋 Copy Script</button>
                         </div>
                     </div>
-                    <div style="margin-top: 0.5rem; font-size: 0.82rem; color: var(--muted);">MikroTik Setup Script (paste into router Terminal):</div>
-                    <pre>{{ .GenerateRouterOSScript $.ServerHost }}</pre>
+                    <pre id="script-{{ .ID }}">{{ .GenerateRouterOSScript $.ServerHost }}</pre>
                 </div>
                 {{ end }}
             {{ else }}
@@ -304,5 +308,27 @@
             {{ end }}
         </div>
     </div>
+
+    <script>
+        function copyScript(id) {
+            const pre = document.getElementById(id);
+            if (!pre) return;
+            const text = pre.innerText;
+
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('MikroTik setup script copied to clipboard!');
+                });
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                alert('MikroTik setup script copied to clipboard!');
+            }
+        }
+    </script>
 </body>
 </html>
