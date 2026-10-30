@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>{{.Tenant.Name}} · Dashboard</title>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/dashboard">{{template "mark"}}<div><div class="brand-name">{{.Tenant.Name}}</div><div class="brand-sub">WiFi dashboard</div></div></a>
+  <div class="who">
+    <span class="live-dot" id="live" title="Live updates">Live</span>
+    <div class="who-text"><div class="who-name">{{.User.Name}}</div><div class="who-role">{{.User.Email}}</div></div>
+    <button class="btn btn-ghost btn-sm" id="logout" type="button">Sign out</button>
+  </div>
+</header>
+
+<div class="layout" data-portal="{{.PortalURL}}" data-subdomain="{{.Tenant.Subdomain}}">
+  <aside class="sidebar">
+    <nav class="card nav" aria-label="Sections">
+      <button type="button" data-view="overview"><svg viewBox="0 0 24 24"><path d="M4 13h6V4H4zM14 20h6V4h-6zM4 20h6v-3H4z"/></svg>Overview</button>
+      <button type="button" data-view="payments"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>Payments</button>
+      <button type="button" data-view="customers"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.2a3.2 3.2 0 0 1 0 5.6M21 20c0-2.6-1.6-4.8-4-5.6"/></svg>Customers<span class="count hidden" id="n-online"></span></button>
+      <button type="button" data-view="plans"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Plans</button>
+      <button type="button" data-view="routers"><svg viewBox="0 0 24 24"><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 17h.01M11 17h.01M8 10a6 6 0 0 1 8 0M5.5 7a10 10 0 0 1 13 0"/></svg>Routers<span class="count hidden" id="n-routers"></span></button>
+      <button type="button" data-view="announcements"><svg viewBox="0 0 24 24"><path d="M4 10v4h3l7 4V6L7 10zM17.5 9a4 4 0 0 1 0 6"/></svg>Announcements</button>
+      <button type="button" data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>Settings</button>
+    </nav>
+
+    <section class="card stack" data-aside="overview">
+      <h3>Your customer page</h3>
+      <p class="muted small">Customers see this when they connect to your WiFi. Share it so they can buy from home too.</p>
+      <div class="secret url" id="portal-url"></div>
+      <div class="row"><button class="btn btn-ghost btn-sm" id="copy-portal" type="button">Copy link</button><a class="btn btn-ghost btn-sm" id="open-portal" target="_blank" rel="noopener">Open</a></div>
+      <div class="notice info small" id="commission-note"></div>
+    </section>
+
+    <section class="card stack hidden" data-aside="payments">
+      <h3>Filter payments</h3>
+      <label>Status
+        <select id="pay-status"><option value="">All</option><option value="SUCCESS">Paid</option><option value="PENDING">Waiting for customer</option><option value="FAILED">Failed or cancelled</option></select>
+      </label>
+      <p class="muted small">"Paid" is what customers paid. "Platform fee" is the commission taken; "You keep" is the rest.</p>
+    </section>
+
+    <section class="card stack hidden" data-aside="customers">
+      <h3>Find a customer</h3>
+      <label>Phone number<input type="search" id="cust-q" placeholder="0712…" inputmode="tel" autocomplete="off"></label>
+      <p class="muted small"><b>Online</b> = using the WiFi right now. <b>Ready</b> = paid, not connected. <b>Revoke</b> cancels the pass and disconnects the customer.</p>
+    </section>
+
+    <form class="card stack hidden" data-aside="plans" id="plan-form" novalidate>
+      <h3 id="plan-form-title">Add a plan</h3>
+      <input type="hidden" id="plan-id">
+      <label>Name<input id="plan-name" maxlength="60" placeholder="e.g. 1 Hour" required></label>
+      <label>Price (KES)<input id="plan-price" type="number" min="1" max="20000" step="1" inputmode="numeric" required></label>
+      <label>Lasts
+        <div class="field-row"><input id="plan-dur" type="number" min="1" step="1" inputmode="numeric" required>
+          <select id="plan-dur-unit"><option value="1">minutes</option><option value="60" selected>hours</option><option value="1440">days</option></select></div>
+      </label>
+      <label>Data limit <span class="hint">leave empty for unlimited</span>
+        <div class="field-row"><input id="plan-data" type="number" min="1" step="1" inputmode="numeric" placeholder="Unlimited">
+          <select id="plan-data-unit"><option value="1">MB</option><option value="1024" selected>GB</option></select></div>
+      </label>
+      <label>Speed cap <span class="hint">leave empty for full speed</span>
+        <div class="field-row"><input id="plan-up" placeholder="Upload e.g. 2M" maxlength="6"><input id="plan-down" placeholder="Download e.g. 5M" maxlength="6"></div>
+      </label>
+      <div class="form-msg" id="plan-msg" role="alert"></div>
+      <div class="row"><button class="btn grow" type="submit" id="plan-save">Save plan</button><button class="btn btn-ghost hidden" type="button" id="plan-cancel">Cancel</button></div>
+    </form>
+
+    <form class="card stack hidden" data-aside="routers" id="router-form" novalidate>
+      <h3 id="router-form-title">Register a router</h3>
+      <input type="hidden" id="router-id">
+      <label>Name<input id="router-name" maxlength="100" placeholder="e.g. Main shop" required></label>
+      <label id="router-mac-label">MAC address <span class="hint">printed on the MikroTik label</span><input id="router-mac" placeholder="48:8F:5A:12:34:56" autocomplete="off"></label>
+      <label>Tunnel IP <span class="hint">optional - the router's WireGuard address, e.g. 10.8.0.2</span><input id="router-ip" placeholder="10.8.0.2" inputmode="decimal" autocomplete="off"></label>
+      <div class="form-msg" id="router-msg" role="alert"></div>
+      <div class="row"><button class="btn grow" type="submit" id="router-save">Register &amp; get script</button><button class="btn btn-ghost hidden" type="button" id="router-cancel">Cancel</button></div>
+    </form>
+
+    <form class="card stack hidden" data-aside="announcements" id="note-form" novalidate>
+      <h3>New announcement</h3>
+      <label>Message <span class="hint" id="note-count">0 / 280</span><textarea id="note-text" maxlength="280" placeholder="e.g. WiFi will be down for maintenance at 10pm tonight."></textarea></label>
+      <label>Show for
+        <select id="note-hours"><option value="6">6 hours</option><option value="24" selected>1 day</option><option value="72">3 days</option><option value="168">7 days</option></select>
+      </label>
+      <div class="form-msg" id="note-msg" role="alert"></div>
+      <button class="btn" type="submit">Publish to customers</button>
+    </form>
+
+    <section class="card stack hidden" data-aside="settings">
+      <h3>Signed in as</h3>
+      <div><b>{{.User.Name}}</b><div class="muted small">{{.User.Email}}</div></div>
+      <div class="muted small">Business: {{.Tenant.Name}} ({{.Tenant.Subdomain}})</div>
+    </section>
+  </aside>
+
+  <main class="main">
+    <section data-panel="overview" class="stack">
+      <div class="view-title"><div><h1>Overview</h1><p id="ov-sub">Your sales and who is online.</p></div></div>
+      <div class="kpis" id="ov-kpis"></div>
+      <div class="grid-2">
+        <div class="card"><div class="card-head"><h2>Last 14 days</h2><div class="legend"><span><i class="lg-gross"></i>Paid by customers</span></div></div><div id="ov-chart"></div></div>
+        <div class="card"><div class="card-head"><h2>Best sellers</h2><span class="sub">last 30 days</span></div><div id="ov-top"></div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card"><div class="card-head"><h2>Recent sales</h2><span class="sub">updates live</span></div><div id="ov-feed" class="feed"></div></div>
+        <div class="card"><div class="card-head"><h2>Right now</h2></div><div id="ov-live" class="stack"></div></div>
+      </div>
+    </section>
+
+    <section data-panel="payments" class="stack hidden"><div class="view-title"><div><h1>Payments</h1><p>Every M-Pesa payment from your customers.</p></div></div><div class="card" id="pay-table"></div></section>
+    <section data-panel="customers" class="stack hidden"><div class="view-title"><div><h1>Customers</h1><p>Passes your customers bought, newest first.</p></div></div><div class="card" id="cust-table"></div></section>
+    <section data-panel="plans" class="stack hidden"><div class="view-title"><div><h1>Plans</h1><p>What customers can buy. Changes show on your customer page straight away; passes already sold keep what they were sold with.</p></div></div><div class="card" id="plan-table"></div></section>
+    <section data-panel="routers" class="stack hidden"><div class="view-title"><div><h1>Routers</h1><p>Your MikroTik boxes. A router is "online" if it checked in during the last 3 minutes.</p></div></div><div class="card" id="router-table"></div></section>
+    <section data-panel="announcements" class="stack hidden"><div class="view-title"><div><h1>Announcements</h1><p>Short messages shown to everyone on your WiFi.</p></div></div><div class="card" id="note-table"></div></section>
+
+    <section data-panel="settings" class="stack hidden">
+      <div class="view-title"><div><h1>Settings</h1><p>Your account.</p></div></div>
+      <form class="card stack narrow" id="pw-form" novalidate>
+        <h2>Change password</h2>
+        <label>Current password<input type="password" id="pw-cur" autocomplete="current-password" required></label>
+        <label>New password <span class="hint">at least 10 characters</span><input type="password" id="pw-new" autocomplete="new-password" minlength="10" required></label>
+        <div class="form-msg" id="pw-msg" role="alert"></div>
+        <button class="btn" type="submit">Update password</button>
+      </form>
+    </section>
+  </main>
+</div>
+<script src="/static/js/core.js"></script>
+<script src="/static/js/tenant.js"></script>
+</body>
+</html>

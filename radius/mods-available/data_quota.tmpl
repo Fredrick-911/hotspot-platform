@@ -1,0 +1,45 @@
+# Data quota counter for FreeRADIUS (module instance name: data_quota).
+#
+# TEMPLATE: scripts/wsl/03-configure-freeradius.sh installs it as
+# /etc/freeradius/3.0/mods-available/data_quota and enables it.
+#
+# What it does on every login (Access-Request):
+#   1. Reads the user's allowance:  radcheck  Max-Total-Octets  (bytes)
+#   2. Adds up what that user has used: all radacct rows for the username
+#   3. used >= allowance  -> Access-Reject            (plan exhausted)
+#      used <  allowance  -> reply Mikrotik-Total-Limit = allowance - used
+#      no Max-Total-Octets -> does nothing (time-only plan, unlimited data)
+#
+# Because the router is told only what is LEFT, reconnecting never resets the
+# plan. Usage is counted per RADIUS username, so every purchase must get its
+# own unique username (see internal/session).
+#
+# KNOWN LIMIT: the reply attribute is 32-bit, so this module alone would send
+# only the low 32 bits of the remaining bytes. policy.d/hotspot.tmpl adds
+# Mikrotik-Total-Limit-Gigawords (the upper bits) so plans over 4 GB work.
+#
+# Why the query uses '%{User-Name}' and not '%{SQL-User-Name}': inside a
+# sqlcounter query FreeRADIUS has not filled in SQL-User-Name yet, so it
+# expands to an empty string, the counter reads 0 bytes used, and every user
+# would get their full allowance on every login. '%{User-Name}' is also what
+# FreeRADIUS's own counter examples use. It is safe here because (a) this
+# module only runs for a username that already has a radcheck row, (b) the Go
+# API only creates usernames made of [a-z0-9-], and (c) the filter_username
+# policy rejects names with spaces and similar before authorize gets this far.
+
+sqlcounter data_quota {
+	sql_module_instance = sql
+	dialect = ${modules.sql.dialect}
+
+	counter_name = Total-Octets-Used
+	check_name = Max-Total-Octets
+	reply_name = Mikrotik-Total-Limit
+
+	key = User-Name
+	reset = never
+
+	query = "\
+		SELECT COALESCE(SUM(acctinputoctets + acctoutputoctets), 0) \
+		FROM radacct \
+		WHERE username = '%{User-Name}'"
+}

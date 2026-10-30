@@ -35,9 +35,9 @@ sql {
 
 	delete_stale_sessions = yes
 
-	# Routers are listed in clients.conf for now.
-	# Later the Go backend can register routers in the "nas" table instead.
-	read_clients = no
+	# Routers registered in the dashboard live in the "nas" table.
+	# FreeRADIUS reads them at START only; scripts/ops/radius-sync-clients.sh restarts it on change.
+	read_clients = yes
 	client_table = "nas"
 
 	group_attribute = "SQL-Group"

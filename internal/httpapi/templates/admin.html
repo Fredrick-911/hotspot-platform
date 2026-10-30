@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>Platform admin · Hotspot Platform</title>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/admin">{{template "mark"}}<div><div class="brand-name">Hotspot Platform</div><div class="brand-sub">Platform admin</div></div></a>
+  <div class="who">
+    <span class="live-dot" id="live" title="Live updates">Live</span>
+    <div class="who-text"><div class="who-name">{{.User.Name}}</div><div class="who-role">{{.User.Email}}</div></div>
+    <button class="btn btn-ghost btn-sm" id="logout" type="button">Sign out</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <nav class="card nav" aria-label="Sections">
+      <button type="button" data-view="overview"><svg viewBox="0 0 24 24"><path d="M4 13h6V4H4zM14 20h6V4h-6zM4 20h6v-3H4z"/></svg>Overview</button>
+      <button type="button" data-view="tenants"><svg viewBox="0 0 24 24"><path d="M3 20V9l9-5 9 5v11zM9 20v-6h6v6"/></svg>Businesses<span class="count hidden" id="n-tenants"></span></button>
+      <button type="button" data-view="payments"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg>Payments</button>
+      <button type="button" data-view="routers"><svg viewBox="0 0 24 24"><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 17h.01M11 17h.01M8 10a6 6 0 0 1 8 0M5.5 7a10 10 0 0 1 13 0"/></svg>Routers<span class="count hidden" id="n-routers"></span></button>
+      <button type="button" data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>Settings</button>
+    </nav>
+
+    <section class="card stack" data-aside="overview">
+      <h3>Platform summary</h3>
+      <div id="side-summary" class="stack"></div>
+      <div class="notice info small">"Platform fee" is your commission: each business's percentage of every successful sale, recorded when the sale happens.</div>
+    </section>
+
+    <form class="card stack hidden" data-aside="tenants" id="tenant-form" novalidate>
+      <h3>Add a business</h3>
+      <label>Business name<input id="t-name" maxlength="100" placeholder="e.g. Kamau Cyber Cafe" required></label>
+      <label>Subdomain <span class="hint">their customer page: name.yourdomain.com</span><input id="t-sub" maxlength="30" placeholder="kamau" autocapitalize="none" autocomplete="off" required></label>
+      <label>Owner's name<input id="t-owner" maxlength="100" placeholder="Jane Kamau" required></label>
+      <label>Owner's email <span class="hint">they sign in with this</span><input id="t-email" type="email" placeholder="jane@example.com" autocomplete="off" required></label>
+      <label>Your commission (%) <span class="hint">taken from every sale</span><input id="t-comm" type="number" min="0" max="100" step="0.5" value="10"></label>
+      <label class="checkbox"><input type="checkbox" id="t-seed" checked>Add 3 starter plans (1 hour, 3 hours, 1 day)</label>
+      <div class="form-msg" id="t-msg" role="alert"></div>
+      <button class="btn" type="submit" id="t-save">Create business</button>
+    </form>
+
+    <section class="card stack hidden" data-aside="payments">
+      <h3>Filter payments</h3>
+      <label>Business<select id="pay-tenant"><option value="">All businesses</option></select></label>
+      <label>Status
+        <select id="pay-status"><option value="">All</option><option value="SUCCESS">Paid</option><option value="PENDING">Waiting for customer</option><option value="FAILED">Failed or cancelled</option></select>
+      </label>
+    </section>
+
+    <section class="card stack hidden" data-aside="routers">
+      <h3>Router health</h3>
+      <p class="muted small">A router is online if it checked in during the last 3 minutes. Owners register their own routers; you can see them all here.</p>
+    </section>
+
+    <section class="card stack hidden" data-aside="settings">
+      <h3>Signed in as</h3>
+      <div><b>{{.User.Name}}</b><div class="muted small">{{.User.Email}}</div></div>
+    </section>
+  </aside>
+
+  <main class="main">
+    <section data-panel="overview" class="stack">
+      <div class="view-title"><div><h1>Platform overview</h1><p id="ov-sub">Money, businesses and routers across the whole platform.</p></div></div>
+      <div class="kpis" id="ov-kpis"></div>
+      <div class="grid-2">
+        <div class="card"><div class="card-head"><h2>Last 14 days</h2><div class="legend"><span><i class="lg-gross"></i>Paid by customers</span><span><i class="lg-fee"></i>Your fee</span></div></div><div id="ov-chart"></div></div>
+        <div class="card"><div class="card-head"><h2>Top businesses</h2><span class="sub">last 30 days</span></div><div id="ov-top"></div></div>
+      </div>
+      <div class="card"><div class="card-head"><h2>Live activity</h2><span class="sub">updates as it happens</span></div><div id="ov-feed" class="feed"></div></div>
+    </section>
+
+    <section data-panel="tenants" class="stack hidden"><div class="view-title"><div><h1>Businesses</h1><p>Every box owner on the platform.</p></div></div><div class="card" id="tenant-table"></div></section>
+    <section data-panel="payments" class="stack hidden"><div class="view-title"><div><h1>Payments</h1><p>Every payment on the platform.</p></div></div><div class="card" id="pay-table"></div></section>
+    <section data-panel="routers" class="stack hidden"><div class="view-title"><div><h1>Routers</h1><p>Every registered MikroTik.</p></div></div><div class="card" id="router-table"></div></section>
+
+    <section data-panel="settings" class="stack hidden">
+      <div class="view-title"><div><h1>Settings</h1><p>Your account.</p></div></div>
+      <form class="card stack narrow" id="pw-form" novalidate>
+        <h2>Change password</h2>
+        <label>Current password<input type="password" id="pw-cur" autocomplete="current-password" required></label>
+        <label>New password <span class="hint">at least 10 characters</span><input type="password" id="pw-new" autocomplete="new-password" minlength="10" required></label>
+        <div class="form-msg" id="pw-msg" role="alert"></div>
+        <button class="btn" type="submit">Update password</button>
+      </form>
+    </section>
+  </main>
+</div>
+<script src="/static/js/core.js"></script>
+<script src="/static/js/admin.js"></script>
+</body>
+</html>

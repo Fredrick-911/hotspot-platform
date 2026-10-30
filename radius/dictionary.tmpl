@@ -1,0 +1,15 @@
+# FreeRADIUS local dictionary — attributes that only OUR platform uses.
+#
+# TEMPLATE: scripts/wsl/03-configure-freeradius.sh installs it as
+# /etc/freeradius/3.0/dictionary (the distro's copy is only comments; the
+# original is kept as dictionary.orig). FreeRADIUS loads this file after its
+# built-in dictionaries. 3000-3999 is the range reserved for local attributes.
+#
+# Max-Total-Octets is a CHECK item (it goes in radcheck, never sent to the
+# router). It is the TOTAL data allowance a user bought, in bytes, up + down
+# combined. 64-bit, so plans larger than 4 GB work.
+#
+# The matching "used so far" counter (Total-Octets-Used) is created by the
+# sqlcounter module itself — do NOT declare it here or FreeRADIUS refuses to start.
+
+ATTRIBUTE	Max-Total-Octets		3010	integer64

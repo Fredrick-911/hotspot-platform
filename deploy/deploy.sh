@@ -42,18 +42,29 @@ if [ -d "/tmp/migrations-updates" ]; then
     rm -rf /tmp/migrations-updates
 fi
 
+# 5b. Router-list sync: restarts FreeRADIUS within a minute of a router being registered
+if [ -d "/tmp/ops-updates" ]; then
+    mkdir -p "${APP_DIR}/scripts/ops"
+    cp /tmp/ops-updates/radius-sync-clients.sh "${APP_DIR}/scripts/ops/"
+    chmod +x "${APP_DIR}/scripts/ops/radius-sync-clients.sh"
+    sudo cp /tmp/ops-updates/hotspot-radius-sync.service /tmp/ops-updates/hotspot-radius-sync.timer /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now hotspot-radius-sync.timer
+    rm -rf /tmp/ops-updates
+fi
+
 # 6. Restart the Go service
 echo "==> Restarting hotspot-api service..."
 sudo systemctl restart hotspot-api
 
 # 7. Verify healthcheck on the configured port
-echo "==> Verifying service health on port ${APP_PORT}..."
+echo "==> Verifying service and database on port ${APP_PORT}..."
 ATTEMPTS=0
 MAX_ATTEMPTS=10
 HEALTHY=0
 
 until [ "${ATTEMPTS}" -ge "${MAX_ATTEMPTS}" ]; do
-    if curl -s -f "http://127.0.0.1:${APP_PORT}/health" > /dev/null 2>&1; then
+    if curl -s -f "http://127.0.0.1:${APP_PORT}/ready" > /dev/null 2>&1; then
         HEALTHY=1
         break
     fi
@@ -62,9 +73,9 @@ until [ "${ATTEMPTS}" -ge "${MAX_ATTEMPTS}" ]; do
 done
 
 if [ "${HEALTHY}" -eq 1 ]; then
-    echo "==> Healthcheck PASSED on :${APP_PORT}/health!"
+    echo "==> Healthcheck PASSED on :${APP_PORT}/ready!"
 else
-    echo "==> ERROR: Healthcheck FAILED! Service not responding on :${APP_PORT}/health"
+    echo "==> ERROR: Healthcheck FAILED! Service not responding on :${APP_PORT}/ready"
     echo "==> Dumping logs:"
     sudo journalctl -u hotspot-api -n 25 --no-pager
     exit 1
