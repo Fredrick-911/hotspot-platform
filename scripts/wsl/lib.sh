@@ -24,6 +24,7 @@ ensure_env() {
     cp "$REPO_ROOT/.env.example" "$ENV_FILE"
     sed -i "s/^RADIUS_DB_PASSWORD=.*/RADIUS_DB_PASSWORD=$(random_secret)/" "$ENV_FILE"
     sed -i "s/^MIKROTIK_LAB_SECRET=.*/MIKROTIK_LAB_SECRET=$(random_secret)/" "$ENV_FILE"
+    sed -i "s/^SESSION_SECRET=.*/SESSION_SECRET=$(openssl rand -hex 32)/" "$ENV_FILE"
     chmod 600 "$ENV_FILE"
     green "Created .env with fresh random secrets (it is git-ignored)."
   fi

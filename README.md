@@ -24,8 +24,13 @@ cd ~/projects/hotspot-platform
 
 make radius-setup    # install + configure + test FreeRADIUS and PostgreSQL
 make check           # format, vet and test the Go code
-make run             # start the API → http://localhost:8080/health
+make seed-demo       # demo businesses, plans and two weeks of sales (development only)
+make run             # start the API → http://127.0.0.1:8080/login
+make test-api        # whole flow on the real database: login → pay → pass → revoke
 ```
+
+Then open <http://127.0.0.1:8080/login> and sign in with the demo accounts printed by `make seed-demo`.
+Customers' page: <http://127.0.0.1:8080/?tenant=kamau>. Details: **[docs/setup/02-dashboards.md](docs/setup/02-dashboards.md)**.
 
 New to any of this? Follow **[docs/setup/01-wsl-freeradius.md](docs/setup/01-wsl-freeradius.md)** step by step.
 
@@ -41,22 +46,29 @@ hotspot-platform/
 │   └── api/                  Program entry point (main.go) — starts the HTTP server
 ├── internal/                 All Go code. "internal" means other projects can't import it.
 │   ├── config/               Reads settings from environment variables
-│   ├── httpapi/              HTTP routes and handlers (/health so far)
-│   ├── tenant/               Box owners, subdomains, tenant middleware      [Phase 1]
-│   ├── plan/                 Internet plans: price, time, data, speed        [Phase 1]
-│   ├── device/               MikroTik routers: secrets, tunnels, status      [Phase 1]
-│   ├── payment/              M-Pesa STK Push and callbacks                   [Phase 2]
-│   ├── session/              Payment → RADIUS user → expiry                  [Phase 2]
-│   └── radius/               Disconnect / CoA messages sent to routers       [Phase 2]
-├── migrations/               Versioned database changes for our own tables
+│   ├── httpapi/              Web layer: customer portal, 3 dashboards, JSON APIs
+│   │   ├── templates/        Pages (login, admin, tenant, account, portal)
+│   │   └── static/           theme.css (sky-blue), core.js and one script per page
+│   ├── auth/                 Passwords (PBKDF2), signed cookies, login rate limits
+│   ├── dashboard/            Read models behind the dashboards (sales, customers, routers)
+│   ├── events/               In-memory live updates (Server-Sent Events)
+│   ├── tenant/               Box owners, subdomains, tenant middleware
+│   ├── plan/                 Internet plans: price, time, data, speed
+│   ├── device/               MikroTik routers: secrets, setup script, heartbeat
+│   ├── payment/              M-Pesa STK Push (PayHero)
+│   ├── session/              Payment → RADIUS user → expiry; revoke; Reaper
+│   └── radius/               Disconnect-Request messages sent to routers
+├── cmd/seed/                 Demo data for development (`make seed-demo`)
+├── migrations/               Our own tables; embedded in the API and applied at startup
 ├── radius/                   FreeRADIUS config templates + dev seed data
 │   ├── clients.conf.tmpl     Which routers may talk to FreeRADIUS
 │   ├── mods-available/
 │   │   └── sql.tmpl          Connects FreeRADIUS to PostgreSQL
 │   └── sql/seed-dev.sql      Test plans and users
 ├── scripts/
-│   └── wsl/                  Numbered setup scripts (01 → 04), run by `make radius-setup`
-├── deploy/                   Dockerfile (later: docker-compose, Caddy, WireGuard)
+│   ├── wsl/                  Numbered setup scripts (01 → 04), run by `make radius-setup`
+│   └── ops/                  Server-side helpers (router-list sync for FreeRADIUS)
+├── deploy/                   deploy.sh, systemd units, Dockerfile
 ├── docs/
 │   ├── architecture.md       How the whole system fits together
 │   ├── setup/                Step-by-step guides
@@ -86,9 +98,9 @@ hotspot-platform/
 | Phase | Goal | Status |
 |---|---|---|
 | 0 | Foundations + hardware proof (FreeRADIUS, repo, CI, MikroTik test) | 🟡 In progress |
-| 1 | Core backend: tenants, subdomains, plans, router registration | ⚪ |
-| 2 | Payment → online: M-Pesa, sessions, captive portal, auto-disconnect | ⚪ |
-| 3 | Owner dashboard, monitoring, security hardening, payouts | ⚪ |
+| 1 | Core backend: tenants, subdomains, plans, router registration | ✅ |
+| 2 | Payment → online: M-Pesa, sessions, captive portal, auto-disconnect | ✅ (hardware test of Disconnect pending) |
+| 3 | Admin, owner and customer dashboards, monitoring, security hardening | 🟡 dashboards done; payouts, wildcard HTTPS, backups next |
 | 4 | Launch: load test, M-Pesa production, legal pages, soft launch | ⚪ |
 
 ## Contributing

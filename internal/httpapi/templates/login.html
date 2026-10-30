@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+{{template "head"}}
+<title>Sign in · Hotspot Platform</title>
+</head>
+<body>
+<main class="center-page">
+  <div class="login-card">
+    <div class="brand">{{template "mark"}}<div><div class="brand-name">Hotspot Platform</div><div class="brand-sub">Owner &amp; admin sign-in</div></div></div>
+    <form class="card stack" id="login-form" autocomplete="on" novalidate>
+      <label>Email
+        <input type="email" name="email" id="email" autocomplete="username" inputmode="email" required autofocus>
+      </label>
+      <label>Password
+        <input type="password" name="password" id="password" autocomplete="current-password" required>
+      </label>
+      <div class="form-msg bad" id="msg" role="alert"></div>
+      <button class="btn btn-block" type="submit" id="go">Sign in</button>
+      <p class="muted small center">Customers: connect to the WiFi and your pass page opens by itself.</p>
+    </form>
+  </div>
+</main>
+<script src="/static/js/core.js"></script>
+<script src="/static/js/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+# Hotspot access policy — called from the "authorize" section of the default
+# site (scripts/wsl/03-configure-freeradius.sh adds the call after "logintime").
+#
+# TEMPLATE: installed as /etc/freeradius/3.0/policy.d/hotspot
+#
+# Order matters: the "sql" module runs earlier in authorize and loads this
+# user's radcheck rows (Expiration, Max-Total-Octets, ...) — we rely on that.
+#
+# TIME limit — nothing to do here. The built-in "expiration" module (runs just
+# before this policy) rejects users past their Expiration and replies
+# Session-Timeout = seconds left. Expiration is stored as UNIX SECONDS in
+# radcheck, e.g. 1793000000. Do not store a date string: FreeRADIUS reads
+# those in the SERVER's local time zone, which can silently shift every plan.
+#
+# DATA limit — handled below.
+
+hotspot_quota {
+	#  Rejects the login when the data allowance is used up. Otherwise replies
+	#  Mikrotik-Total-Limit = remaining bytes (low 32 bits only).
+	data_quota
+
+	if (&control:Max-Total-Octets) {
+		#  remaining = allowance - used, in bytes. 64-bit arithmetic.
+		update control {
+			&Tmp-Integer64-0 := "%{expr:%{control:Max-Total-Octets} - %{sql:SELECT COALESCE(SUM(acctinputoctets + acctoutputoctets), 0) FROM radacct WHERE username = '%{SQL-User-Name}'}}"
+		}
+
+		#  Upper 32 bits = how many whole 4 GiB blocks are left.
+		update reply {
+			&Mikrotik-Total-Limit-Gigawords := "%{expr:%{control:Tmp-Integer64-0} / 4294967296}"
+		}
+
+		#  Under 4 GiB left: no need to send the attribute at all.
+		if (&reply:Mikrotik-Total-Limit-Gigawords == 0) {
+			update reply {
+				&Mikrotik-Total-Limit-Gigawords !* ANY
+			}
+		}
+	}
+}

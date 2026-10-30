@@ -18,7 +18,10 @@ render() {
   local src="$REPO_ROOT/$1" dest="$RADDB/$2"
   [[ -f "$src" ]] || die "Missing template $src"
   # Keep the distro's original file once, so you can always go back.
-  if root_file_exists "$dest" && ! root_file_exists "$dest.orig"; then
+  # A file that already came from one of our templates (it names this script)
+  # is not an original, so it is never saved as .orig.
+  if root_file_exists "$dest" && ! root_file_exists "$dest.orig" \
+     && ! root_cat "$dest" | grep -F '03-configure-freeradius.sh' > /dev/null; then
     sudo cp -p "$dest" "$dest.orig"
   fi
   envsubst "$VARS" < "$src" | sudo tee "$dest" > /dev/null
@@ -28,12 +31,16 @@ render() {
 }
 
 step "Installing config files"
-render radius/clients.conf.tmpl        clients.conf
-render radius/mods-available/sql.tmpl  mods-available/sql
+render radius/clients.conf.tmpl            clients.conf
+render radius/mods-available/sql.tmpl      mods-available/sql
+render radius/dictionary.tmpl              dictionary
+render radius/mods-available/data_quota.tmpl mods-available/data_quota
+render radius/policy.d/hotspot.tmpl        policy.d/hotspot
 
-step "Enabling the SQL module"
-sudo ln -sfn ../mods-available/sql "$RADDB/mods-enabled/sql"
-echo "  linked mods-enabled/sql"
+step "Enabling the SQL and data-quota modules"
+sudo ln -sfn ../mods-available/sql        "$RADDB/mods-enabled/sql"
+sudo ln -sfn ../mods-available/data_quota "$RADDB/mods-enabled/data_quota"
+echo "  linked mods-enabled/sql and mods-enabled/data_quota"
 
 step "Checking IPv6 support"
 # FreeRADIUS listens on IPv6 by default. If IPv6 is switched off in this WSL,
@@ -63,6 +70,33 @@ elif root_cat "$SITE" | grep -E '^\s*ipv6addr' > /dev/null; then
   yellow "  IPv6 is off in this WSL — disabled FreeRADIUS IPv6 listeners (IPv4 is all we need)."
 else
   echo "  IPv6 listeners already disabled."
+fi
+
+step "Hooking the quota policy into the default site"
+# The policy must run in "authorize" AFTER the sql module (which loads the
+# user's limits) and AFTER the built-in expiration module. Both run before
+# "logintime", so we add one line right after it. Safe to run again: the
+# marker line "hotspot_quota" is only added once.
+if root_cat "$SITE" | grep -E '^[[:space:]]*hotspot_quota[[:space:]]*$' > /dev/null; then
+  echo "  already hooked."
+else
+  root_file_exists "$SITE.orig" || sudo cp -p "$SITE" "$SITE.orig"
+  root_cat "$SITE" | awk '
+    { print }
+    !done && /^[ \t]*logintime[ \t]*$/ {
+      print ""
+      print "\t# hotspot-platform: data quota (radius/policy.d/hotspot.tmpl)"
+      print "\thotspot_quota"
+      done = 1
+    }
+  ' | sudo tee "$SITE.new" > /dev/null
+  if ! sudo grep -E '^[[:space:]]*hotspot_quota[[:space:]]*$' "$SITE.new" > /dev/null; then
+    sudo rm -f "$SITE.new"
+    die "Could not find the 'logintime' line in $SITE to hook after. Is this FreeRADIUS 3.x?"
+  fi
+  sudo mv "$SITE.new" "$SITE"
+  sudo chown root:freerad "$SITE"; sudo chmod 640 "$SITE"
+  echo "  added 'hotspot_quota' after 'logintime' in sites-available/default"
 fi
 
 step "Checking the configuration"

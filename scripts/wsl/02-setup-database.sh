@@ -44,8 +44,14 @@ else
   green "Tables created."
 fi
 
-step "Adding test users and plans"
-as_radius -f "$REPO_ROOT/radius/sql/seed-dev.sql"
+# The seed creates users with the well-known password "pass1234". It must never
+# reach a real server, so it only runs for local development (or CI).
+step "Adding test users"
+if [[ "${APP_ENV:-development}" == "development" || "${CI:-}" == "true" || "${FORCE_SEED:-}" == "1" ]]; then
+  as_radius -f "$REPO_ROOT/radius/sql/seed-dev.sql"
+else
+  yellow "APP_ENV=${APP_ENV} - skipping test users (set FORCE_SEED=1 to load them anyway)."
+fi
 
 step "Tables in '$RADIUS_DB_NAME'"
 as_radius -c '\dt'
