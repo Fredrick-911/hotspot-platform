@@ -127,8 +127,8 @@ func TestDashboardsEndToEnd(t *testing.T) {
 		}
 		must(t, db.QueryRow(ctx, `
 			INSERT INTO payments (tenant_id, plan_id, phone_number, amount_cents, external_reference, status, fee_cents, mpesa_receipt)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, 'RCPT' || $5) RETURNING id::text`,
-			tid, planID, phone, cents, ref+sub, status, fee).Scan(&id))
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id::text`,
+			tid, planID, phone, cents, ref+sub, status, fee, "RCPT"+ref+sub).Scan(&id))
 		return id
 	}
 	pay1 := addPayment(dataPlan.ID, "0711000001", "SUCCESS", 6000, "R1")
