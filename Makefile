@@ -23,7 +23,7 @@ fmt: ## Format all Go code
 
 test-api: ## Full test of dashboards + payments + sessions on the real database (needs `make radius-setup` once)
 	TEST_DATABASE_URL="postgres://$(RADIUS_DB_USER):$(RADIUS_DB_PASSWORD)@$(RADIUS_DB_HOST):$(RADIUS_DB_PORT)/$(RADIUS_DB_NAME)?sslmode=disable" \
-		go test -tags integration -count=1 ./internal/dashboard/ ./internal/httpapi/
+		go test -p 1 -tags integration -count=1 ./internal/dashboard/ ./internal/httpapi/
 
 seed-demo: ## Fill the DEVELOPMENT database with demo businesses, plans and two weeks of sales
 	APP_ENV=development go run ./cmd/seed
