@@ -115,3 +115,28 @@ func TestGenerateScriptHeartbeatAndPAP(t *testing.T) {
 		t.Error("no heartbeat URL means no heartbeat scheduler")
 	}
 }
+
+func TestGenerateScriptWireGuard(t *testing.T) {
+	d := Device{ID: "xyz", Name: "Airtel Shop", MacAddress: "48:8f:5a:12:34:56", RadiusSecret: "sekrit"}
+	s := d.GenerateScript(ScriptOptions{
+		PortalHost:         "hotspot.example.com",
+		RadiusHost:         "10.8.0.1",
+		WireGuardEndpoint:  "78.141.207.74",
+		WireGuardPort:      51820,
+		WireGuardPublicKey: "28A4jT3iJQgeQ9Lxsvw3fPoNre7djCfDj0aVnDqOA24=",
+		WireGuardTunnelIP:  "10.8.0.2",
+	})
+
+	for _, want := range []string{
+		"/interface wireguard add name=wg-cloud",
+		"address=10.8.0.2/24 interface=wg-cloud",
+		`endpoint-address=78.141.207.74 endpoint-port=51820`,
+		`public-key="28A4jT3iJQgeQ9Lxsvw3fPoNre7djCfDj0aVnDqOA24="`,
+		"persistent-keepalive=25s",
+		`address=10.8.0.1 secret="sekrit"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("script missing WireGuard element: %q", want)
+		}
+	}
+}
