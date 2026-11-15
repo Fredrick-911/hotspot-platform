@@ -259,9 +259,13 @@ func Heartbeat(ctx context.Context, db *pgxpool.Pool, id, secret string) error {
 
 // ScriptOptions are the addresses a router needs.
 type ScriptOptions struct {
-	PortalHost   string // where the captive portal lives (walled garden + heartbeat)
-	RadiusHost   string // where FreeRADIUS listens, as the router reaches it (WireGuard address)
-	HeartbeatURL string // full URL the router calls once a minute; empty = no heartbeat
+	PortalHost         string // where the captive portal lives (walled garden + heartbeat)
+	RadiusHost         string // where FreeRADIUS listens, as the router reaches it (WireGuard address)
+	HeartbeatURL       string // full URL the router calls once a minute; empty = no heartbeat
+	WireGuardEndpoint  string // public endpoint of the WireGuard gateway, e.g. "78.141.207.74"
+	WireGuardPort      int    // UDP port, default 51820
+	WireGuardPublicKey string // Vultr server WireGuard public key
+	WireGuardTunnelIP  string // Assigned client IP, e.g. "10.8.0.2"
 }
 
 // GenerateRouterOSScript is kept for callers that only know one host.
@@ -274,11 +278,35 @@ func (d Device) GenerateScript(o ScriptOptions) string {
 	if o.RadiusHost == "" {
 		o.RadiusHost = o.PortalHost
 	}
-	script := fmt.Sprintf(`# ========================================================
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf(`# ========================================================
 # MikroTik Quick Setup Script for Hotspot Platform
 # Router: %s  (MAC %s)
 # ========================================================
+`, displayName(d), d.MacAddress))
 
+	if o.WireGuardEndpoint != "" && o.WireGuardPublicKey != "" {
+		tunnelIP := o.WireGuardTunnelIP
+		if tunnelIP == "" {
+			if d.NasIPAddress != nil && *d.NasIPAddress != "" {
+				tunnelIP = *d.NasIPAddress
+			} else {
+				tunnelIP = "10.8.0.2"
+			}
+		}
+		wgPort := o.WireGuardPort
+		if wgPort <= 0 {
+			wgPort = 51820
+		}
+		sb.WriteString(fmt.Sprintf(`
+# 0. WireGuard VPN Tunnel (Bypasses Airtel 4G CGNAT & Carrier Firewalls)
+/interface wireguard add name=wg-cloud listen-port=13231 comment="Hotspot Cloud Tunnel"
+/ip address add address=%s/24 interface=wg-cloud comment="Hotspot Tunnel IP"
+/interface wireguard peers add interface=wg-cloud public-key="%s" endpoint-address=%s endpoint-port=%d allowed-address=10.8.0.0/24 persistent-keepalive=25s comment="Hotspot Cloud Gateway"
+`, tunnelIP, o.WireGuardPublicKey, o.WireGuardEndpoint, wgPort))
+	}
+
+	sb.WriteString(fmt.Sprintf(`
 # 1. Enable RADIUS for Hotspot Authentication
 /radius add service=hotspot address=%s secret="%s" timeout=3000ms comment="Hotspot Platform Cloud"
 
@@ -292,15 +320,15 @@ func (d Device) GenerateScript(o ScriptOptions) string {
 
 # 4. Whitelist Cloud Portal in Walled Garden (unauthenticated access)
 /ip hotspot walled-garden add dst-host=%s action=allow comment="Cloud Portal Access"
-`, displayName(d), d.MacAddress, o.RadiusHost, d.RadiusSecret, o.PortalHost)
+`, o.RadiusHost, d.RadiusSecret, o.PortalHost))
 
 	if o.HeartbeatURL != "" {
-		script += fmt.Sprintf(`
+		sb.WriteString(fmt.Sprintf(`
 # 5. Heartbeat: tells the dashboard this router is online (once a minute)
 /system scheduler add name=hotspot-heartbeat interval=1m on-event="/tool fetch url=\"%s\" http-method=post http-data=\"key=%s\" keep-result=no" comment="Hotspot Platform heartbeat"
-`, o.HeartbeatURL, d.RadiusSecret)
+`, o.HeartbeatURL, d.RadiusSecret))
 	}
-	return script
+	return sb.String()
 }
 
 func displayName(d Device) string {
