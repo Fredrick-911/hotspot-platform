@@ -113,6 +113,7 @@ func (s *Server) Handler() http.Handler {
 	// Router and payment-provider calls (no cookies).
 	mux.HandleFunc("POST /api/payments/callback", s.handlePaymentCallback)
 	mux.HandleFunc("POST /api/device/heartbeat", s.handleHeartbeat)
+	mux.HandleFunc("POST /api/billing/intasend/callback", s.handleIntaSendWebhook)
 
 	// Staff: login and pages.
 	mux.HandleFunc("GET /login", s.handleLoginPage)
@@ -154,6 +155,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/tenant/announcements", owner(s.tenantCreateAnnouncement))
 	mux.HandleFunc("DELETE /api/tenant/announcements/{id}", owner(s.tenantDeleteAnnouncement))
 	mux.HandleFunc("GET /api/tenant/stream", owner(s.tenantStream))
+	mux.HandleFunc("POST /api/tenant/subscription/stk", owner(s.tenantSubscriptionSTK))
+	mux.HandleFunc("POST /api/tenant/subscription/checkout", owner(s.tenantSubscriptionCheckout))
+	mux.HandleFunc("GET /api/tenant/subscription/status", owner(s.tenantSubscriptionStatus))
 
 	// Customer side: everything below belongs to ONE tenant, found from the host name.
 	if s.db != nil {

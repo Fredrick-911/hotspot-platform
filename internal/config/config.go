@@ -22,6 +22,10 @@ type Config struct {
 	PayHeroChannelID int
 	BaseURL          string // e.g. "http://78.141.207.74:8081"
 
+	// IntaSend B2B Billing (SaaS subscriptions & tenant billing)
+	IntaSendPublishableKey string
+	IntaSendSecretKey      string
+
 	// Dashboards and sessions.
 	SessionSecret    []byte // signs login cookies and the PayHero callback token
 	TrustProxy       bool   // believe X-Forwarded-For/Proto (only behind Caddy/nginx)
@@ -66,6 +70,8 @@ func Load() (Config, error) {
 		BootstrapAdminEmail:    getenv("BOOTSTRAP_ADMIN_EMAIL", ""),
 		BootstrapAdminPassword: getenv("BOOTSTRAP_ADMIN_PASSWORD", ""),
 		RadiusPublicHost:       getenv("RADIUS_PUBLIC_HOST", ""),
+		IntaSendPublishableKey: getenv("INTASEND_PUBLISHABLE_KEY", ""),
+		IntaSendSecretKey:      getenv("INTASEND_SECRET_KEY", ""),
 	}
 
 	secret := getenv("SESSION_SECRET", "")
@@ -91,6 +97,11 @@ func (c Config) CookieSecure() bool { return strings.HasPrefix(c.BaseURL, "https
 
 // PayHeroConfigured reports whether real M-Pesa payments are switched on.
 func (c Config) PayHeroConfigured() bool { return c.PayHeroUsername != "" && c.PayHeroChannelID > 0 }
+
+// IntaSendConfigured reports whether IntaSend B2B billing is enabled.
+func (c Config) IntaSendConfigured() bool {
+	return c.IntaSendPublishableKey != "" && c.IntaSendSecretKey != ""
+}
 
 // DevPayments reports whether the "simulate a successful payment" shortcut is allowed:
 // development mode AND no real PayHero credentials.

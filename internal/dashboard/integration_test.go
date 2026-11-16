@@ -171,6 +171,7 @@ func TestDashboardsEndToEnd(t *testing.T) {
 	}
 
 	// ---- router + usage ----
+	_, _ = db.Exec(ctx, "DELETE FROM nas WHERE nasname LIKE '10.77.%'")
 	ip := "10.77.0.2"
 	dev, err := device.Register(ctx, db, tid, "Test shop", "AA:BB:CC:00:11:22", &ip)
 	if err != nil {
