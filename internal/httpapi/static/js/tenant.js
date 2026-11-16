@@ -364,3 +364,88 @@
   // Router "online" is time-based, so refresh the numbers now and then even without events.
   setInterval(function () { if (!document.hidden) refreshSoon(); }, 60000);
 })();
+// IntaSend Platform Subscription Billing
+(function () {
+  const stkForm = document.getElementById('sub-stk-form');
+  const phoneEl = document.getElementById('sub-phone');
+  const msgEl = document.getElementById('sub-msg');
+  const stkBtn = document.getElementById('sub-stk-btn');
+  const checkoutBtn = document.getElementById('sub-checkout-btn');
+  if (!stkForm) return;
+
+  function setMsg(text, ok) {
+    msgEl.textContent = text;
+    msgEl.className = 'form-msg ' + (ok ? 'ok' : 'err');
+  }
+
+  let pollTimer = null;
+  function pollStatus(invoiceId) {
+    clearInterval(pollTimer);
+    let attempts = 0;
+    pollTimer = setInterval(async () => {
+      attempts++;
+      if (attempts > 30) {
+        clearInterval(pollTimer);
+        setMsg('Timed out waiting for M-Pesa confirmation. Refresh if you paid.', false);
+        stkBtn.disabled = false;
+        return;
+      }
+      try {
+        const res = await fetch('/api/tenant/subscription/status?invoice_id=' + encodeURIComponent(invoiceId));
+        const data = await res.json();
+        if (data.paid) {
+          clearInterval(pollTimer);
+          setMsg('Payment confirmed! Receipt: ' + (data.receipt || invoiceId) + '. Subscription extended by 30 days.', true);
+          stkBtn.disabled = false;
+        }
+      } catch (_) {}
+    }, 3000);
+  }
+
+  stkForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const phone = phoneEl.value.trim();
+    if (!phone) {
+      setMsg('Please enter your M-Pesa phone number.', false);
+      return;
+    }
+    stkBtn.disabled = true;
+    setMsg('Sending M-Pesa prompt to your phone...', true);
+    try {
+      const res = await fetch('/api/tenant/subscription/stk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || 'Failed to send M-Pesa prompt.', false);
+        stkBtn.disabled = false;
+        return;
+      }
+      setMsg('M-Pesa prompt sent! Enter your PIN on your phone...', true);
+      pollStatus(data.invoice_id);
+    } catch (err) {
+      setMsg('Network error sending prompt.', false);
+      stkBtn.disabled = false;
+    }
+  });
+
+  checkoutBtn.addEventListener('click', async () => {
+    checkoutBtn.disabled = true;
+    setMsg('Opening IntaSend checkout...', true);
+    try {
+      const res = await fetch('/api/tenant/subscription/checkout', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error || 'Failed to start checkout.', false);
+        checkoutBtn.disabled = false;
+        return;
+      }
+      window.location.href = data.checkout_url;
+    } catch (err) {
+      setMsg('Network error starting checkout.', false);
+      checkoutBtn.disabled = false;
+    }
+  });
+})();

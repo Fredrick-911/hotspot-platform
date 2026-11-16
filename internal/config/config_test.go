@@ -52,3 +52,18 @@ func TestBaseHostAndSecureCookie(t *testing.T) {
 		t.Fatalf("%+v", c)
 	}
 }
+
+func TestIntaSendConfigured(t *testing.T) {
+	c := Config{}
+	if c.IntaSendConfigured() {
+		t.Fatal("expected IntaSendConfigured to be false when keys are empty")
+	}
+	c.IntaSendPublishableKey = "ISPubKey_test_123"
+	if c.IntaSendConfigured() {
+		t.Fatal("expected IntaSendConfigured to be false when secret key is missing")
+	}
+	c.IntaSendSecretKey = "ISSecretKey_test_456"
+	if !c.IntaSendConfigured() {
+		t.Fatal("expected IntaSendConfigured to be true when both keys are set")
+	}
+}

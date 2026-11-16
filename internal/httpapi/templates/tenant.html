@@ -116,7 +116,19 @@
     <section data-panel="announcements" class="stack hidden"><div class="view-title"><div><h1>Announcements</h1><p>Short messages shown to everyone on your WiFi.</p></div></div><div class="card" id="note-table"></div></section>
 
     <section data-panel="settings" class="stack hidden">
-      <div class="view-title"><div><h1>Settings</h1><p>Your account.</p></div></div>
+      <div class="view-title"><div><h1>Settings</h1><p>Your account &amp; platform subscription.</p></div></div>
+      <div class="card stack narrow" id="sub-card">
+        <h2>Platform Subscription</h2>
+        <p class="muted small">Monthly software fee: <strong>KES 2,500 / month</strong>. Keep your portal and routers online.</p>
+        <form class="stack" id="sub-stk-form" novalidate>
+          <label>M-Pesa Phone Number <input type="tel" id="sub-phone" placeholder="0712 345 678" required></label>
+          <div class="form-msg" id="sub-msg" role="alert"></div>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn" type="submit" id="sub-stk-btn">Renew with M-Pesa</button>
+            <button class="btn" type="button" id="sub-checkout-btn" style="background:var(--surface-2,#eef2f6);color:var(--text,#0f172a);border:1px solid var(--border,#cbd5e1)">Pay with Card / Bank</button>
+          </div>
+        </form>
+      </div>
       <form class="card stack narrow" id="pw-form" novalidate>
         <h2>Change password</h2>
         <label>Current password<input type="password" id="pw-cur" autocomplete="current-password" required></label>
