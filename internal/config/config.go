@@ -38,7 +38,10 @@ type Config struct {
 	BootstrapAdminPassword string
 
 	// What the generated MikroTik script points at.
-	RadiusPublicHost string // address of FreeRADIUS as the router reaches it (WireGuard IP); default = BaseURL host
+	RadiusPublicHost   string // address of FreeRADIUS as the router reaches it (WireGuard IP); default = BaseURL host
+	WireGuardEndpoint  string // public IP/host of WireGuard gateway
+	WireGuardPort      int    // WireGuard UDP port (default 51820)
+	WireGuardPublicKey string // Vultr server WireGuard public key
 }
 
 // Load reads settings from the environment.
@@ -72,6 +75,9 @@ func Load() (Config, error) {
 		RadiusPublicHost:       getenv("RADIUS_PUBLIC_HOST", ""),
 		IntaSendPublishableKey: getenv("INTASEND_PUBLISHABLE_KEY", ""),
 		IntaSendSecretKey:      getenv("INTASEND_SECRET_KEY", ""),
+		WireGuardEndpoint:      getenv("WIREGUARD_ENDPOINT", ""),
+		WireGuardPort:          getint("WIREGUARD_PORT", 51820),
+		WireGuardPublicKey:     getenv("WIREGUARD_PUBLIC_KEY", ""),
 	}
 
 	secret := getenv("SESSION_SECRET", "")
@@ -147,4 +153,13 @@ func getbool(key string, fallback bool) bool {
 		return fallback
 	}
 	return b
+}
+
+func getint(key string, fallback int) int {
+	if v := getenv(key, ""); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return fallback
 }
