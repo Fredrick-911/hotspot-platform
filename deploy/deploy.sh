@@ -47,9 +47,11 @@ if [ -d "/tmp/ops-updates" ]; then
     mkdir -p "${APP_DIR}/scripts/ops"
     cp /tmp/ops-updates/radius-sync-clients.sh "${APP_DIR}/scripts/ops/"
     chmod +x "${APP_DIR}/scripts/ops/radius-sync-clients.sh"
-    sudo cp /tmp/ops-updates/hotspot-radius-sync.service /tmp/ops-updates/hotspot-radius-sync.timer /etc/systemd/system/
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now hotspot-radius-sync.timer
+    if [ -f "/tmp/ops-updates/hotspot-radius-sync.service" ]; then
+        sudo cp /tmp/ops-updates/hotspot-radius-sync.service /tmp/ops-updates/hotspot-radius-sync.timer /etc/systemd/system/
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now hotspot-radius-sync.timer
+    fi
     rm -rf /tmp/ops-updates
 fi
 
