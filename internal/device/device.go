@@ -34,6 +34,8 @@ type Device struct {
 	MacAddress   string     `json:"mac_address"`
 	NasIPAddress *string    `json:"nas_ip_address,omitempty"`
 	RadiusSecret string     `json:"radius_secret,omitempty"`
+	WGPublicKey  *string    `json:"wg_public_key,omitempty"`
+	WGPrivateKey *string    `json:"-"`
 	LastSeenAt   *time.Time `json:"last_seen_at,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 }
@@ -76,11 +78,11 @@ func NormalizeIP(raw string) (*string, error) {
 	return &out, nil
 }
 
-const deviceColumns = `id::text, tenant_id::text, name, mac_address, host(nas_ip_address), radius_secret, last_seen_at, created_at`
+const deviceColumns = `id::text, tenant_id::text, name, mac_address, host(nas_ip_address), radius_secret, wg_public_key, wg_private_key, last_seen_at, created_at`
 
 func scanDevice(row pgx.Row) (Device, error) {
 	var d Device
-	err := row.Scan(&d.ID, &d.TenantID, &d.Name, &d.MacAddress, &d.NasIPAddress, &d.RadiusSecret, &d.LastSeenAt, &d.CreatedAt)
+	err := row.Scan(&d.ID, &d.TenantID, &d.Name, &d.MacAddress, &d.NasIPAddress, &d.RadiusSecret, &d.WGPublicKey, &d.WGPrivateKey, &d.LastSeenAt, &d.CreatedAt)
 	return d, err
 }
 
@@ -120,6 +122,10 @@ func Register(ctx context.Context, db *pgxpool.Pool, tenantID, name, rawMAC stri
 	if err != nil {
 		return nil, err
 	}
+	wgPriv, wgPub, err := GenerateWireGuardKeypair()
+	if err != nil {
+		return nil, err
+	}
 	name = strings.TrimSpace(name)
 	if len(name) > 100 {
 		name = name[:100]
@@ -132,9 +138,9 @@ func Register(ctx context.Context, db *pgxpool.Pool, tenantID, name, rawMAC stri
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	d, err := scanDevice(tx.QueryRow(ctx, `
-		INSERT INTO devices (tenant_id, name, mac_address, nas_ip_address, radius_secret)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING `+deviceColumns, tenantID, name, normMAC, nasIP, secret))
+		INSERT INTO devices (tenant_id, name, mac_address, nas_ip_address, radius_secret, wg_public_key, wg_private_key)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING `+deviceColumns, tenantID, name, normMAC, nasIP, secret, wgPub, wgPriv))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -300,10 +306,15 @@ func (d Device) GenerateScript(o ScriptOptions) string {
 		}
 		sb.WriteString(fmt.Sprintf(`
 # 0. WireGuard VPN Tunnel (Bypasses Airtel 4G CGNAT & Carrier Firewalls)
-/interface wireguard add name=wg-cloud listen-port=13231 comment="Hotspot Cloud Tunnel"
+/interface wireguard add name=wg-cloud listen-port=13231%s comment="Hotspot Cloud Tunnel"
 /ip address add address=%s/24 interface=wg-cloud comment="Hotspot Tunnel IP"
 /interface wireguard peers add interface=wg-cloud public-key="%s" endpoint-address=%s endpoint-port=%d allowed-address=10.8.0.0/24 persistent-keepalive=25s comment="Hotspot Cloud Gateway"
-`, tunnelIP, o.WireGuardPublicKey, o.WireGuardEndpoint, wgPort))
+`, func() string {
+			if d.WGPrivateKey != nil && *d.WGPrivateKey != "" {
+				return " private-key=\"" + *d.WGPrivateKey + "\""
+			}
+			return ""
+		}(), tunnelIP, o.WireGuardPublicKey, o.WireGuardEndpoint, wgPort))
 	}
 
 	sb.WriteString(fmt.Sprintf(`
@@ -327,6 +338,12 @@ func (d Device) GenerateScript(o ScriptOptions) string {
 # 5. Heartbeat: tells the dashboard this router is online (once a minute)
 /system scheduler add name=hotspot-heartbeat interval=1m on-event="/tool fetch url=\"%s\" http-method=post http-data=\"key=%s\" keep-result=no" comment="Hotspot Platform heartbeat"
 `, o.HeartbeatURL, d.RadiusSecret))
+	}
+	if o.PortalHost != "" {
+		sb.WriteString(fmt.Sprintf(`
+# 6. Auto-redirect phones to the Cloud Captive Portal
+/file set hotspot/login.html contents="<html><head><meta http-equiv=\"refresh\" content=\"0; url=https://%s/?mac=$(mac)&link-login=$(link-login-only)\"></head><body>Redirecting to WiFi Portal...</body></html>"
+`, o.PortalHost))
 	}
 	return sb.String()
 }

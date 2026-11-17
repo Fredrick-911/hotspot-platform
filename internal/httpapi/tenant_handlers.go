@@ -185,10 +185,18 @@ func deviceInputError(err error) (string, int) {
 }
 
 func (s *Server) scriptFor(d *device.Device) string {
+	tunnelIP := ""
+	if d.NasIPAddress != nil {
+		tunnelIP = *d.NasIPAddress
+	}
 	return d.GenerateScript(device.ScriptOptions{
-		PortalHost:   s.cfg.BaseHost(),
-		RadiusHost:   s.cfg.RadiusHost(),
-		HeartbeatURL: s.cfg.BaseURL + "/api/device/heartbeat?id=" + d.ID,
+		PortalHost:         s.cfg.BaseHost(),
+		RadiusHost:         s.cfg.RadiusHost(),
+		HeartbeatURL:       s.cfg.BaseURL + "/api/device/heartbeat?id=" + d.ID,
+		WireGuardEndpoint:  s.cfg.WireGuardEndpoint,
+		WireGuardPort:      s.cfg.WireGuardPort,
+		WireGuardPublicKey: s.cfg.WireGuardPublicKey,
+		WireGuardTunnelIP:  tunnelIP,
 	})
 }
 
