@@ -119,7 +119,7 @@
       <div class="view-title"><div><h1>Settings</h1><p>Your account &amp; platform subscription.</p></div></div>
       <div class="card stack narrow" id="sub-card">
         <h2>Platform Subscription</h2>
-        <p class="muted small">Monthly software fee: <strong>KES 2,500 / month</strong>. Keep your portal and routers online.</p>
+        <p class="muted small">Monthly software fee: <strong>KES {{.Tenant.SubscriptionAmountKES}} / month</strong>. Keep your portal and routers online.</p>
         <form class="stack" id="sub-stk-form" novalidate>
           <label>M-Pesa Phone Number <input type="tel" id="sub-phone" placeholder="0712 345 678" required></label>
           <div class="form-msg" id="sub-msg" role="alert"></div>

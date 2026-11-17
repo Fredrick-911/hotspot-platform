@@ -22,11 +22,12 @@ const (
 
 // Tenant represents an ISP or box owner.
 type Tenant struct {
-	ID            string
-	Name          string
-	Subdomain     string
-	Status        string
-	CommissionBPS int // platform fee in basis points: 1000 = 10.00 %
+	ID                    string
+	Name                  string
+	Subdomain             string
+	Status                string
+	CommissionBPS         int // platform fee in basis points: 1000 = 10.00 %
+	SubscriptionAmountKES int // monthly SaaS subscription fee in KES
 }
 
 type contextKey string
@@ -94,8 +95,8 @@ func Create(ctx context.Context, db interface {
 func ByID(ctx context.Context, db *pgxpool.Pool, id string) (*Tenant, error) {
 	var t Tenant
 	err := db.QueryRow(ctx,
-		`SELECT id::text, name, subdomain, status, commission_bps FROM tenants WHERE id = $1`, id,
-	).Scan(&t.ID, &t.Name, &t.Subdomain, &t.Status, &t.CommissionBPS)
+		`SELECT id::text, name, subdomain, status, commission_bps, COALESCE(subscription_amount_kes, 999) FROM tenants WHERE id = $1`, id,
+	).Scan(&t.ID, &t.Name, &t.Subdomain, &t.Status, &t.CommissionBPS, &t.SubscriptionAmountKES)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTenantNotFound
 	}
@@ -126,9 +127,9 @@ func Middleware(db *pgxpool.Pool, allowQueryOverride bool) func(http.Handler) ht
 
 			var t Tenant
 			err := db.QueryRow(r.Context(),
-				"SELECT id::text, name, subdomain, status, commission_bps FROM tenants WHERE subdomain = $1",
+				"SELECT id::text, name, subdomain, status, commission_bps, COALESCE(subscription_amount_kes, 999) FROM tenants WHERE subdomain = $1",
 				subdomain,
-			).Scan(&t.ID, &t.Name, &t.Subdomain, &t.Status, &t.CommissionBPS)
+			).Scan(&t.ID, &t.Name, &t.Subdomain, &t.Status, &t.CommissionBPS, &t.SubscriptionAmountKES)
 			if err != nil {
 				slog.Warn("tenant lookup failed", "host", r.Host, "subdomain", subdomain, "err", err)
 				http.Error(w, "Portal not found. Please check your connection.", http.StatusNotFound)
