@@ -414,7 +414,7 @@
     try {
       const res = await fetch('/api/tenant/subscription/stk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'hotspot' },
         body: JSON.stringify({ phone })
       });
       const data = await res.json();
@@ -435,7 +435,7 @@
     checkoutBtn.disabled = true;
     setMsg('Opening IntaSend checkout...', true);
     try {
-      const res = await fetch('/api/tenant/subscription/checkout', { method: 'POST' });
+      const res = await fetch('/api/tenant/subscription/checkout', { method: 'POST', headers: { 'X-Requested-With': 'hotspot' } });
       const data = await res.json();
       if (!res.ok) {
         setMsg(data.error || 'Failed to start checkout.', false);

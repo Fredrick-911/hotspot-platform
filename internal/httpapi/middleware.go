@@ -126,7 +126,7 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 		default:
-			if r.URL.Path != "/api/payments/callback" && r.URL.Path != "/api/device/heartbeat" &&
+			if r.URL.Path != "/api/payments/callback" && r.URL.Path != "/api/device/heartbeat" && r.URL.Path != "/api/billing/intasend/callback" &&
 				r.Header.Get(csrfHeader) != csrfValue {
 				writeError(w, http.StatusForbidden, "missing request header")
 				return
